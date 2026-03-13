@@ -1,8 +1,8 @@
 services:
   local-issuer-service:
     container_name: local-issuer-service
-    image: issuerservice-dev:latest # Note: image pull requires docker login
-    pull_policy: missing
+    image: issuerservice-dev:latest
+    pull_policy: never
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -13,16 +13,16 @@ services:
       - "10000:80"        # did API           -> /
       - "10100:15151"     # identity API      -> /api/identity
       - "10200:15152"     # issueradmin API   -> /api/issuer
-#      - "9292:9292"      # sts API           -> /api/sts
-#      - "8181:8181"      # default API       -> /api
-#      - "9999:9999"      # statuslist API    -> /statuslist
-#      - "13132:13132"    # issuance API      -> /api/issuance
+    #      - "9292:9292"      # sts API           -> /api/sts
+    #      - "8181:8181"      # default API       -> /api
+    #      - "9999:9999"      # statuslist API    -> /statuslist
+    #      - "13132:13132"    # issuance API      -> /api/issuance
 
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1044
       - edc.statuslist.callback.address=http://local-issuer-service:9999/statuslist
       - edc.hostname=local-issuer-service
-      - edc.ih.issuer.demonstrator.defaultconfig=/app/setup.json
+      - edc.ih.issuer.dev.defaultconfig=/app/setup.json
       - edc.issuer.issuance.send.retry.limit=0
       - edc.iam.did.web.use.https=false
       - edc.ih.api.superuser.id=admin
@@ -43,8 +43,9 @@ services:
       - fx-test-network
 
   shared-postgres:
-    container_name: issuer-postgres
+    container_name: shared-postgres
     image: postgres:16.4-alpine
+    pull_policy: never
     environment:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=password
@@ -61,11 +62,12 @@ services:
   shared-vault:
     container_name: shared-vault
     image: vault:1.13.3
+    pull_policy: never
     command: server -dev -dev-root-token-id=vaultsecret0123456789 -dev-listen-address=0.0.0.0:8200
     environment:
       VAULT_ADDR: http://0.0.0.0:8200
-      SKIP_SETCAP: true
-      SKIP_CHOWN: true
+      SKIP_SETCAP: "true"
+      SKIP_CHOWN: "true"
     healthcheck:
       test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status >/dev/null 2>&1"]
       interval: 4s
@@ -79,6 +81,7 @@ services:
   vault-init:
     container_name: vault-init
     image: alpine:3.19
+    pull_policy: never
     depends_on:
       shared-vault:
         condition: service_healthy
@@ -87,15 +90,21 @@ services:
       VAULT_TOKEN: vaultsecret0123456789
     volumes:
       - ./additional_config/vault-init.sh:/scripts/init.sh:ro
-    entrypoint: [ "sh", "-c", "apk add --no-check-certificate --no-cache curl jq openssl && sh /scripts/init.sh" ]
+
+    entrypoint: [
+      "sh", "-c",
+      "apk add --no-check-certificate --no-cache curl jq openssl \
+       && tr -d '\r' < /scripts/init.sh > /tmp/init.sh \
+       && sh /tmp/init.sh"
+    ]
     restart: "no"
     networks:
       - fx-test-network
 
   consumer-idhub:
     container_name: consumer-idhub
-    image: identityhub-dev:latest # Note: image pull requires docker login
-    pull_policy: missing
+    image: identityhub-dev:latest
+    pull_policy: never
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -107,12 +116,11 @@ services:
       - "20100:15151"       # identity API      -> /api/identity
       - "20500:9292"        # sts API           -> /api/sts
       - "20600:13131"       # credentials API   -> /api/credentials
-#      - "8181:8181"        # default API       -> /api
-#      - "9999:9999"        # statuslist API    -> /statuslist
+    #      - "8181:8181"        # default API       -> /api
+    #      - "9999:9999"        # statuslist API    -> /statuslist
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
       - edc.hostname=consumer-idhub
-      - edc.ih.issuer.demonstrator.scope=org.eclipse.tractusx.vc.type
       - edc.iam.did.web.use.https=false
       - edc.ih.api.superuser.id=admin
       - edc.ih.api.superuser.key=YWRtaW4.adminKey
@@ -131,8 +139,8 @@ services:
 
   provider-idhub:
     container_name: provider-idhub
-    image: identityhub-dev:latest # Note: image pull requires docker login
-    pull_policy: missing
+    image: identityhub-dev:latest
+    pull_policy: never
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -149,7 +157,6 @@ services:
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
       - edc.hostname=provider-idhub
-      - edc.ih.issuer.demonstrator.scope=org.eclipse.tractusx.vc.type
       - edc.iam.did.web.use.https=false
       - edc.ih.api.superuser.id=admin
       - edc.ih.api.superuser.key=YWRtaW4.adminKey
@@ -169,7 +176,7 @@ services:
   consumer-controlplane:
     container_name: consumer-controlplane
     image: edc-controlplane-postgresql-hashicorp-vault:latest
-    pull_policy: missing
+    pull_policy: never
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
@@ -202,10 +209,10 @@ services:
     volumes:
       - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
     depends_on:
-        shared-postgres:
-          condition: service_healthy
-        shared-vault:
-          condition: service_healthy
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
       - "5005:5005"   # Debugger
@@ -218,6 +225,7 @@ services:
   consumer-dataplane:
     container_name: consumer-dataplane
     image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
       - web.http.public.port=9500
@@ -256,12 +264,10 @@ services:
     networks:
       - fx-test-network
 
-
-
   provider-controlplane:
     container_name: provider-controlplane
     image: edc-controlplane-postgresql-hashicorp-vault:latest
-    pull_policy: missing
+    pull_policy: never
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
@@ -294,10 +300,10 @@ services:
     volumes:
       - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
     depends_on:
-        shared-postgres:
-          condition: service_healthy
-        shared-vault:
-          condition: service_healthy
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
       - "5006:5005"   # Debugger
@@ -311,6 +317,7 @@ services:
   provider-dataplane:
     container_name: provider-dataplane
     image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
     environment:
       - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
       - web.http.public.port=9500
