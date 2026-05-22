@@ -1,7 +1,27 @@
 #!/usr/bin/env bash
+# Fail loudly: previously a silent curl failure left Vault half-seeded and the
+# container still exited 0, which surfaced much later as a dataplane
+# "private key 'prov_priv' not found" error during transfer.
+set -eu
 
 VAULT="${VAULT_ADDR:-http://shared-vault:8200}"
 TOKEN="${VAULT_TOKEN:?missing VAULT_TOKEN}"
+
+# Force the Vault hostname to an absolute DNS name (trailing dot). On hosts
+# whose resolv.conf advertises a search domain (e.g. systemd-resolved adds
+# 'search localdomain'), Alpine/musl's resolver appends it -> queries
+# 'shared-vault.localdomain' -> NXDOMAIN -> curl fails with "Could not resolve
+# host", while glibc containers retry the bare name. The trailing dot stops the
+# search-domain append so resolution works regardless of host config.
+VAULT=$(echo "$VAULT" | sed -E 's#(://[^/:]+)#\1.#')
+
+# Wait until Vault actually answers before seeding. depends_on healthcheck
+# covers the daemon, but this also guards against transient DNS/startup races.
+echo "Waiting for Vault at $VAULT ..."
+until curl -fsS -o /dev/null "$VAULT/v1/sys/health"; do
+  sleep 1
+done
+echo "Vault reachable; seeding dataplane keypairs."
 
 # function that creates and deploys a rsa keypair:
 
