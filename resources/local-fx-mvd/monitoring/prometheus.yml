@@ -1,0 +1,20 @@
+# Prometheus scrape config for the local-fx-mvd monitoring overlay.
+#
+# Stage 1.2 — scrapes cAdvisor + node-exporter. Later stages will append
+# targets (otel-collector in Stage 2).
+
+global:
+  # 5 s keeps per-container curves fine-grained enough to see negotiation /
+  # transfer spikes during Bruno + k6 runs without drowning Prometheus on a
+  # laptop. Revisit if we add many more targets.
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: node-exporter
+    static_configs:
+      - targets: ['node-exporter:9100']

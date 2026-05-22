@@ -1,0 +1,21 @@
+# Grafana dashboard provisioning — applied on startup.
+# Docs: https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+#
+# Loads every *.json file under /etc/grafana/dashboards (a read-only bind mount
+# from ./monitoring/grafana/dashboards) into the "FX MVD" folder in the UI.
+
+apiVersion: 1
+
+providers:
+  - name: fx-mvd
+    orgId: 1
+    folder: FX MVD
+    type: file
+    # Dashboards edited in the UI won't be overwritten unless the file on disk
+    # changes — lets you tweak a panel without losing it on next `up`.
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

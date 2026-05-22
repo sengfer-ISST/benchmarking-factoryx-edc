@@ -1,0 +1,481 @@
+# Local-fx-mvd stack WITH monitoring (cAdvisor + node-exporter + Prometheus +
+# Grafana). This is a standalone superset of docker-compose.yaml — bring it up
+# on its own:
+#   docker compose -f docker-compose.monitoring.yaml up -d
+#
+# Use docker-compose.yaml when you don't want monitoring overhead.
+#
+# Stage 1.4 scope: cAdvisor + node-exporter + Prometheus + Grafana with a
+# provisioned Prometheus datasource AND two provisioned community dashboards
+# (cAdvisor Compute Resources 14282, Node Exporter Full 1860).
+# Stage 2 (see monitoring/PLAN.md) adds the OTel collector + Tempo for JVM
+# metrics and traces.
+
+services:
+  local-issuer-service:
+    container_name: local-issuer-service
+    image: issuerservice-dev:latest
+    pull_policy: never
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    ports:
+      - "1044:1044"       # debugger
+      - "10000:80"        # did API           -> /
+      - "10100:15151"     # identity API      -> /api/identity
+      - "10200:15152"     # issueradmin API   -> /api/issuer
+    #      - "9292:9292"      # sts API           -> /api/sts
+    #      - "8181:8181"      # default API       -> /api
+    #      - "9999:9999"      # statuslist API    -> /statuslist
+    #      - "13132:13132"    # issuance API      -> /api/issuance
+
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1044
+      - edc.statuslist.callback.address=http://local-issuer-service:9999/statuslist
+      - edc.hostname=local-issuer-service
+      - edc.ih.issuer.dev.defaultconfig=/app/setup.json
+      - edc.issuer.issuance.send.retry.limit=0
+      - edc.iam.did.web.use.https=false
+      - edc.ih.api.superuser.id=admin
+      - edc.ih.api.superuser.key=YWRtaW4.adminKey
+      - edc.issuer.statuslist.signing.key.alias=foo
+      - web.http.did.port=80
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/iss_db
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+    volumes:
+      - ./additional_config/mc-cred-def.json:/app/setup.json
+      - ./additional_config/logging.properties:/app/logging.properties
+    networks:
+      - fx-test-network
+
+  shared-postgres:
+    container_name: shared-postgres
+    image: postgres:16.4-alpine
+    pull_policy: never
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - ./additional_config/pg_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -h 127.0.0.1 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      - fx-test-network
+
+  shared-vault:
+    container_name: shared-vault
+    image: vault:1.13.3
+    pull_policy: never
+    command: server -dev -dev-root-token-id=vaultsecret0123456789 -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_ADDR: http://0.0.0.0:8200
+      SKIP_SETCAP: "true"
+      SKIP_CHOWN: "true"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status >/dev/null 2>&1"]
+      interval: 4s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "8200:8200"
+    networks:
+      - fx-test-network
+
+  vault-init:
+    container_name: vault-init
+    image: alpine:3.19
+    pull_policy: never
+    depends_on:
+      shared-vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://shared-vault:8200
+      VAULT_TOKEN: vaultsecret0123456789
+    volumes:
+      - ./additional_config/vault-init.sh:/scripts/init.sh:ro
+
+    entrypoint: [
+      "sh", "-c",
+      "apk add --no-check-certificate --no-cache curl jq openssl \
+       && tr -d '\r' < /scripts/init.sh > /tmp/init.sh \
+       && sh /tmp/init.sh"
+    ]
+    restart: "no"
+    networks:
+      - fx-test-network
+
+  consumer-idhub:
+    container_name: consumer-idhub
+    image: identityhub-dev:latest
+    pull_policy: never
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    ports:
+      - "1045:1045"         # debugger
+      - "20000:80"          # did API           -> /
+      - "20100:15151"       # identity API      -> /api/identity
+      - "20500:9292"        # sts API           -> /api/sts
+      - "20600:13131"       # credentials API   -> /api/credentials
+    #      - "8181:8181"        # default API       -> /api
+    #      - "9999:9999"        # statuslist API    -> /statuslist
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
+      - edc.hostname=consumer-idhub
+      - edc.iam.did.web.use.https=false
+      - edc.ih.api.superuser.id=admin
+      - edc.ih.api.superuser.key=YWRtaW4.adminKey
+      - web.http.did.port=80
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/cons_ih_db
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+    volumes:
+      - ./additional_config/logging.properties:/app/logging.properties
+    networks:
+      - fx-test-network
+
+  provider-idhub:
+    container_name: provider-idhub
+    image: identityhub-dev:latest
+    pull_policy: never
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    ports:
+      - "1046:1045"         # debugger
+      - "21000:80"          # did API           -> /
+      - "21100:15151"       # identity API      -> /api/identity
+      - "21500:9292"        # sts API           -> /api/sts
+      - "21600:13131"       # credentials API   -> /api/credentials
+    #      - "8181:8181"        # default API       -> /api
+    #      - "9999:9999"        # statuslist API    -> /statuslist
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
+      - edc.hostname=provider-idhub
+      - edc.iam.did.web.use.https=false
+      - edc.ih.api.superuser.id=admin
+      - edc.ih.api.superuser.key=YWRtaW4.adminKey
+      - web.http.did.port=80
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/prov_ih_db
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+    volumes:
+      - ./additional_config/logging.properties:/app/logging.properties
+    networks:
+      - fx-test-network
+
+  consumer-controlplane:
+    container_name: consumer-controlplane
+    image: edc-controlplane-postgresql-hashicorp-vault:latest
+    pull_policy: never
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
+      - edc.iam.did.web.use.https=false
+      - edc.iam.sts.oauth.client.secret.alias=consumersecret
+      - edc.iam.credential.revocation.mimetype=application/json
+      - edc.iam.sts.oauth.token.url=http://consumer-idhub:9292/api/sts/token
+      - edc.iam.sts.oauth.client.id=did:web:consumer-idhub:user:consumer
+      - edc.iam.issuer.id=did:web:consumer-idhub:user:consumer
+      - web.http.port=9000
+      - web.http.path=/api
+      - web.http.management.port=9010
+      - web.http.management.path=/management
+      - web.http.protocol.port=9020
+      - web.http.protocol.path=/dsp
+      - web.http.validation.port=9030
+      - web.http.validation.path=/validation
+      - web.http.control.port=9050
+      - web.http.control.path=/control
+      - edc.hostname=consumer-controlplane
+      - edc.participant.id=did:web:consumer-idhub:user:consumer
+      - edc.dsp.callback.address=http://consumer-controlplane:9020/dsp
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/cons_cpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+    volumes:
+      - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "5005:5005"   # Debugger
+      - "29000:9000"  # Default port
+      - "29010:9010"  # Management API
+      - "29020:9020" # DSP API
+    networks:
+      - fx-test-network
+
+  consumer-dataplane:
+    container_name: consumer-dataplane
+    image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      - web.http.public.port=9500
+      - web.http.public.path=/public
+      - web.http.management.port=9510
+      - web.http.management.path=/management
+      - web.http.control.port=9550
+      - web.http.control.path=/control
+      - edc.hostname=consumer-dataplane
+      - edc.dpf.selector.url=http://consumer-controlplane:9050/control/v1/dataplanes
+      - edc.data.plane.self.unregistration=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/cons_dpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.transfer.proxy.token.signer.privatekey.alias=cons_priv
+      - edc.transfer.proxy.token.verifier.publickey.alias=cons_pub
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
+      - edc.iam.did.web.use.https=false
+      - edc.iam.sts.oauth.client.secret.alias=consumersecret
+      - edc.iam.credential.revocation.mimetype=application/json
+      - edc.iam.sts.oauth.token.url=http://consumer-idhub:9292/api/sts/token
+      - edc.iam.sts.oauth.client.id=did:web:consumer-idhub:user:consumer
+      - edc.iam.issuer.id=did:web:consumer-idhub:user:consumer
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "5008:5005"   # Debugger
+      - "9600:9500" # Public API
+    networks:
+      - fx-test-network
+
+  provider-controlplane:
+    container_name: provider-controlplane
+    image: edc-controlplane-postgresql-hashicorp-vault:latest
+    pull_policy: never
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
+      - edc.iam.did.web.use.https=false
+      - edc.iam.sts.oauth.client.secret.alias=providersecret
+      - edc.iam.credential.revocation.mimetype=application/json
+      - edc.iam.sts.oauth.token.url=http://provider-idhub:9292/api/sts/token
+      - edc.iam.sts.oauth.client.id=did:web:provider-idhub:user:provider
+      - edc.iam.issuer.id=did:web:provider-idhub:user:provider
+      - web.http.port=9000
+      - web.http.path=/api
+      - web.http.management.port=9010
+      - web.http.management.path=/management
+      - web.http.protocol.port=9020
+      - web.http.protocol.path=/dsp
+      - web.http.validation.port=9030
+      - web.http.validation.path=/validation
+      - web.http.control.port=9050
+      - web.http.control.path=/control
+      - edc.hostname=provider-controlplane
+      - edc.participant.id=did:web:provider-idhub:user:provider
+      - edc.dsp.callback.address=http://provider-controlplane:9020/dsp
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/prov_cpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+    volumes:
+      - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "5006:5005"   # Debugger
+      - "39000:9000"  # Default port
+      - "39010:9010"  # Management API
+      - "39020:9020" # DSP API
+
+    networks:
+      - fx-test-network
+
+  provider-dataplane:
+    container_name: provider-dataplane
+    image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
+    environment:
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      - web.http.public.port=9500
+      - web.http.public.path=/public
+      - web.http.management.port=9510
+      - web.http.management.path=/management
+      - web.http.control.port=9550
+      - web.http.control.path=/control
+      - edc.hostname=provider-dataplane
+      - edc.dpf.selector.url=http://provider-controlplane:9050/control/v1/dataplanes
+      - edc.data.plane.self.unregistration=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/prov_dpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.transfer.proxy.token.signer.privatekey.alias=prov_priv
+      - edc.transfer.proxy.token.verifier.publickey.alias=prov_pub
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
+      - edc.iam.did.web.use.https=false
+      - edc.iam.sts.oauth.client.secret.alias=providersecret
+      - edc.iam.credential.revocation.mimetype=application/json
+      - edc.iam.sts.oauth.token.url=http://provider-idhub:9292/api/sts/token
+      - edc.iam.sts.oauth.client.id=did:web:provider-idhub:user:provider
+      - edc.iam.issuer.id=did:web:provider-idhub:user:provider
+
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "5007:5005"   # Debugger
+      - "9500:9500" # Public API
+    networks:
+      - fx-test-network
+
+  # ---------------------------------------------------------------------------
+  # Monitoring stack
+  # ---------------------------------------------------------------------------
+
+  # Per-container CPU / memory / network / disk-IO. Auto-discovers every
+  # container on the host's Docker daemon — no per-service wiring needed.
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    # cAdvisor needs broad read access to the host to enumerate cgroups and
+    # container filesystems. All mounts are read-only.
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  # Host-level CPU / memory / disk / network / filesystem.
+  # Needed so we can tell a container spike apart from a host-side bottleneck
+  # (e.g. swap, IO saturation) during Bruno / k6 runs.
+  node-exporter:
+    container_name: node-exporter
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      # Exclude pseudo and container-overlay filesystems — otherwise the
+      # "Filesystem" panels fill up with docker/overlay noise.
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  # Scrapes cAdvisor and stores time series. Scrape interval is 5 s — tight
+  # enough to catch short negotiation/transfer spikes, loose enough to avoid
+  # swamping a laptop.
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - cadvisor
+      - node-exporter
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  # Grafana reads from Prometheus (datasource provisioned at startup from
+  # ./monitoring/grafana/provisioning). Dashboards will be provisioned in 1.4.
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:11.2.0
+    environment:
+      # Dev credentials. Fine for a local benchmark rig; never use in shared
+      # environments.
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Skip the first-login password change prompt — keeps the file
+      # reproducible for Bruno/k6 runs.
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Dashboard JSON payloads referenced by provisioning/dashboards/dashboards.yaml.
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  fx-test-network:
+    name: fx-test-network
+    driver: bridge
