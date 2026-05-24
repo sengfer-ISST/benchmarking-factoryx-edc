@@ -1,0 +1,33 @@
+# Tempo config for the local-fx-mvd monitoring overlay (Stage 2.3).
+#
+# Single-binary, local-disk trace store. The collector pushes spans here over
+# OTLP/gRPC; Grafana queries them via the provisioned Tempo datasource.
+# Sized for a laptop benchmark rig — not for production.
+
+server:
+  http_listen_port: 3200          # Grafana queries this (Tempo API)
+  grpc_listen_port: 9097          # non-default to avoid clashing with EDC ports
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317  # collector exports spans here
+
+ingester:
+  # Flush quickly so a trace shows up in Grafana within seconds of a Bruno run.
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # Keep traces for a working week, matching Prometheus retention.
+    block_retention: 168h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal

@@ -1,15 +1,15 @@
-# Local-fx-mvd stack WITH monitoring (cAdvisor + node-exporter + Prometheus +
-# Grafana). This is a standalone superset of docker-compose.yaml — bring it up
-# on its own:
+# Local-fx-mvd stack WITH monitoring (node-exporter + OTel collector + Tempo +
+# Prometheus + Grafana). This is a standalone superset of docker-compose.yaml —
+# bring it up on its own:
 #   docker compose -f docker-compose.monitoring.yaml up -d
 #
 # Use docker-compose.yaml when you don't want monitoring overhead.
 #
-# Stage 1.4 scope: cAdvisor + node-exporter + Prometheus + Grafana with a
-# provisioned Prometheus datasource AND two provisioned community dashboards
-# (cAdvisor Compute Resources 14282, Node Exporter Full 1860).
-# Stage 2 (see monitoring/PLAN.md) adds the OTel collector + Tempo for JVM
-# metrics and traces.
+# Stack: node-exporter (host metrics) + the OTel collector + Tempo (per-API
+# latency/throughput, JVM, and distributed traces from the EDC runtimes),
+# scraped/stored by Prometheus and visualised in Grafana with a provisioned
+# Prometheus + Tempo datasource and the "EDC API & Runtime (OTel)" dashboard.
+# See monitoring/PLAN.md.
 
 services:
   local-issuer-service:
@@ -191,7 +191,10 @@ services:
     image: edc-controlplane-postgresql-hashicorp-vault:latest
     pull_policy: never
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      # NB: the compose `entrypoint:` override drops the Dockerfile's
+      # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
+      # is auto-applied by the JVM regardless of entrypoint.
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
       - edc.iam.did.web.use.https=false
       - edc.iam.sts.oauth.client.secret.alias=consumersecret
@@ -219,8 +222,13 @@ services:
       - edc.vault.hashicorp.url=http://shared-vault:8200
       - edc.vault.hashicorp.health.check.enabled=true
       - edc.vault.hashicorp.token=vaultsecret0123456789
+      # OTel agent identity — distinguishes this runtime in metrics/traces.
+      - OTEL_SERVICE_NAME=consumer-controlplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mvd,service.instance.id=consumer-controlplane
     volumes:
       - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+      # Activates the otherwise-inert OTel java-agent baked into the image.
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -240,7 +248,10 @@ services:
     image: edc-dataplane-hashicorp-vault:latest
     pull_policy: never
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      # NB: the compose `entrypoint:` override drops the Dockerfile's
+      # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
+      # is auto-applied by the JVM regardless of entrypoint.
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - web.http.public.port=9500
       - web.http.public.path=/public
       - web.http.management.port=9510
@@ -265,6 +276,12 @@ services:
       - edc.iam.sts.oauth.token.url=http://consumer-idhub:9292/api/sts/token
       - edc.iam.sts.oauth.client.id=did:web:consumer-idhub:user:consumer
       - edc.iam.issuer.id=did:web:consumer-idhub:user:consumer
+      # OTel agent identity — distinguishes this runtime in metrics/traces.
+      - OTEL_SERVICE_NAME=consumer-dataplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mvd,service.instance.id=consumer-dataplane
+    volumes:
+      # Activates the otherwise-inert OTel java-agent baked into the image.
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -282,7 +299,10 @@ services:
     image: edc-controlplane-postgresql-hashicorp-vault:latest
     pull_policy: never
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      # NB: the compose `entrypoint:` override drops the Dockerfile's
+      # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
+      # is auto-applied by the JVM regardless of entrypoint.
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
       - edc.iam.did.web.use.https=false
       - edc.iam.sts.oauth.client.secret.alias=providersecret
@@ -310,8 +330,13 @@ services:
       - edc.vault.hashicorp.url=http://shared-vault:8200
       - edc.vault.hashicorp.health.check.enabled=true
       - edc.vault.hashicorp.token=vaultsecret0123456789
+      # OTel agent identity — distinguishes this runtime in metrics/traces.
+      - OTEL_SERVICE_NAME=provider-controlplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mvd,service.instance.id=provider-controlplane
     volumes:
       - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+      # Activates the otherwise-inert OTel java-agent baked into the image.
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
     depends_on:
       shared-postgres:
         condition: service_healthy
@@ -332,7 +357,10 @@ services:
     image: edc-dataplane-hashicorp-vault:latest
     pull_policy: never
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+      # NB: the compose `entrypoint:` override drops the Dockerfile's
+      # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
+      # is auto-applied by the JVM regardless of entrypoint.
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - web.http.public.port=9500
       - web.http.public.path=/public
       - web.http.management.port=9510
@@ -357,6 +385,12 @@ services:
       - edc.iam.sts.oauth.token.url=http://provider-idhub:9292/api/sts/token
       - edc.iam.sts.oauth.client.id=did:web:provider-idhub:user:provider
       - edc.iam.issuer.id=did:web:provider-idhub:user:provider
+      # OTel agent identity — distinguishes this runtime in metrics/traces.
+      - OTEL_SERVICE_NAME=provider-dataplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mvd,service.instance.id=provider-dataplane
+    volumes:
+      # Activates the otherwise-inert OTel java-agent baked into the image.
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
 
     depends_on:
       shared-postgres:
@@ -374,24 +408,36 @@ services:
   # Monitoring stack
   # ---------------------------------------------------------------------------
 
-  # Per-container CPU / memory / network / disk-IO. Auto-discovers every
-  # container on the host's Docker daemon — no per-service wiring needed.
-  cadvisor:
-    container_name: cadvisor
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    # cAdvisor needs broad read access to the host to enumerate cgroups and
-    # container filesystems. All mounts are read-only.
-    privileged: true
-    devices:
-      - /dev/kmsg
+  # Single OTLP sink for the EDC java-agents. Receives traces + metrics on 4317,
+  # re-exposes metrics in Prometheus format on 8889 (scraped by Prometheus).
+  # This is what turns the inert agents (Stage 2.1) into useful telemetry.
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command:
+      - --config=/etc/otel-collector-config.yaml
     volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+      - ./monitoring/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
-      - "8080:8080"
+      - "4317:4317"   # OTLP/gRPC ingest
+      - "8889:8889"   # Prometheus metrics endpoint
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  # Trace store. Receives spans from the collector and serves them to Grafana,
+  # so a single negotiation/transfer can be followed across all four EDC
+  # runtimes. Local-disk backend in a named volume.
+  tempo:
+    container_name: tempo
+    image: grafana/tempo:2.6.0
+    command:
+      - -config.file=/etc/tempo.yaml
+    volumes:
+      - ./monitoring/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo API (Grafana datasource queries this)
     networks:
       - fx-test-network
     restart: unless-stopped
@@ -421,9 +467,9 @@ services:
       - fx-test-network
     restart: unless-stopped
 
-  # Scrapes cAdvisor and stores time series. Scrape interval is 5 s — tight
-  # enough to catch short negotiation/transfer spikes, loose enough to avoid
-  # swamping a laptop.
+  # Scrapes node-exporter + the OTel collector and stores time series. Scrape
+  # interval is 5 s — tight enough to catch short negotiation/transfer spikes,
+  # loose enough to avoid swamping a laptop.
   prometheus:
     container_name: prometheus
     image: prom/prometheus:v2.54.1
@@ -438,14 +484,14 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      - cadvisor
       - node-exporter
+      - otel-collector
     networks:
       - fx-test-network
     restart: unless-stopped
 
-  # Grafana reads from Prometheus (datasource provisioned at startup from
-  # ./monitoring/grafana/provisioning). Dashboards will be provisioned in 1.4.
+  # Grafana reads from Prometheus + Tempo (datasources provisioned at startup
+  # from ./monitoring/grafana/provisioning).
   grafana:
     container_name: grafana
     image: grafana/grafana:11.2.0
@@ -474,6 +520,7 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
+  tempo-data:
 
 networks:
   fx-test-network:

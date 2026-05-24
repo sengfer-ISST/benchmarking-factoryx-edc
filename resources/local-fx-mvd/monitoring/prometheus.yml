@@ -1,7 +1,7 @@
 # Prometheus scrape config for the local-fx-mvd monitoring overlay.
 #
-# Stage 1.2 — scrapes cAdvisor + node-exporter. Later stages will append
-# targets (otel-collector in Stage 2).
+# Scrapes node-exporter (host metrics) + the OTel collector (which re-exposes
+# EDC application metrics: HTTP server latency/throughput + JVM).
 
 global:
   # 5 s keeps per-container curves fine-grained enough to see negotiation /
@@ -11,10 +11,11 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: cadvisor
-    static_configs:
-      - targets: ['cadvisor:8080']
-
   - job_name: node-exporter
     static_configs:
       - targets: ['node-exporter:9100']
+
+  # EDC application metrics, re-exported by the collector in Prometheus format.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ['otel-collector:8889']

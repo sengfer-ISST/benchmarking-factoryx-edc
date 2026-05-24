@@ -3,15 +3,14 @@
 #
 # Stage 1.3: single Prometheus datasource pointing at the overlay's
 # `prometheus` service (DNS resolution happens over `fx-test-network`).
-# Stage 2 will add a Tempo datasource here for traces.
+# Stage 2.3: adds a Tempo datasource for distributed traces.
 
 apiVersion: 1
 
 datasources:
   - name: Prometheus
-    # Stable UID so provisioned dashboards can reference it explicitly if
-    # needed (the cAdvisor dashboard references it by name "Prometheus",
-    # which matches the `name` field above).
+    # Stable UID so provisioned dashboards can hard-reference the datasource
+    # (the EDC API & Runtime dashboard binds to uid `prometheus`).
     uid: prometheus
     type: prometheus
     access: proxy
@@ -22,3 +21,20 @@ datasources:
       # Match prometheus.yml's scrape interval so Grafana's default step
       # matches real resolution — avoids misleading flat lines on fine ranges.
       timeInterval: 5s
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      # Correlate a span back to the per-endpoint Prometheus metrics so you can
+      # jump from a slow trace to the latency/throughput graph for that route.
+      tracesToMetrics:
+        datasourceUid: prometheus
+      # Service-graph + node-graph views are driven by span metrics.
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
