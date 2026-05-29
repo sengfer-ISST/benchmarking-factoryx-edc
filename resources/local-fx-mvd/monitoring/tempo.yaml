@@ -1,5 +1,3 @@
-# Tempo config for the local-fx-mvd monitoring overlay (Stage 2.3).
-#
 # Single-binary, local-disk trace store. The collector pushes spans here over
 # OTLP/gRPC; Grafana queries them via the provisioned Tempo datasource.
 # Sized for a laptop benchmark rig — not for production.

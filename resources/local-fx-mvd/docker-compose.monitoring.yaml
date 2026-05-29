@@ -1,16 +1,3 @@
-# Local-fx-mvd stack WITH monitoring (node-exporter + OTel collector + Tempo +
-# Prometheus + Grafana). This is a standalone superset of docker-compose.yaml —
-# bring it up on its own:
-#   docker compose -f docker-compose.monitoring.yaml up -d
-#
-# Use docker-compose.yaml when you don't want monitoring overhead.
-#
-# Stack: node-exporter (host metrics) + the OTel collector + Tempo (per-API
-# latency/throughput, JVM, and distributed traces from the EDC runtimes),
-# scraped/stored by Prometheus and visualised in Grafana with a provisioned
-# Prometheus + Tempo datasource and the "EDC API & Runtime (OTel)" dashboard.
-# See monitoring/PLAN.md.
-
 services:
   local-issuer-service:
     container_name: local-issuer-service
