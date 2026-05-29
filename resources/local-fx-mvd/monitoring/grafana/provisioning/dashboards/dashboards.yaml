@@ -1,9 +1,3 @@
-# Grafana dashboard provisioning — applied on startup.
-# Docs: https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
-#
-# Loads every *.json file under /etc/grafana/dashboards (a read-only bind mount
-# from ./monitoring/grafana/dashboards) into the "FX MVD" folder in the UI.
-
 apiVersion: 1
 
 providers:
