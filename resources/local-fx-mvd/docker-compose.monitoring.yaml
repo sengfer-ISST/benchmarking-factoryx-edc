@@ -3,13 +3,16 @@ services:
     container_name: local-issuer-service
     image: issuerservice-dev:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     depends_on:
       shared-postgres:
         condition: service_healthy
       shared-vault:
         condition: service_healthy
     ports:
-      - "1044:1044"       # debugger
       - "10000:80"        # did API           -> /
       - "10100:15151"     # identity API      -> /api/identity
       - "10200:15152"     # issueradmin API   -> /api/issuer
@@ -19,7 +22,7 @@ services:
     #      - "13132:13132"    # issuance API      -> /api/issuance
 
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1044
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
       - edc.statuslist.callback.address=http://local-issuer-service:9999/statuslist
       - edc.hostname=local-issuer-service
       - edc.ih.issuer.dev.defaultconfig=/app/setup.json
@@ -46,6 +49,10 @@ services:
     container_name: shared-postgres
     image: postgres:16.4-alpine
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     environment:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=password
@@ -63,6 +70,10 @@ services:
     container_name: shared-vault
     image: vault:1.13.3
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     command: server -dev -dev-root-token-id=vaultsecret0123456789 -dev-listen-address=0.0.0.0:8200
     environment:
       VAULT_ADDR: http://0.0.0.0:8200
@@ -105,13 +116,16 @@ services:
     container_name: consumer-idhub
     image: identityhub-dev:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     depends_on:
       shared-postgres:
         condition: service_healthy
       shared-vault:
         condition: service_healthy
     ports:
-      - "1045:1045"         # debugger
       - "20000:80"          # did API           -> /
       - "20100:15151"       # identity API      -> /api/identity
       - "20500:9292"        # sts API           -> /api/sts
@@ -119,7 +133,7 @@ services:
     #      - "8181:8181"        # default API       -> /api
     #      - "9999:9999"        # statuslist API    -> /statuslist
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
       - edc.hostname=consumer-idhub
       - edc.iam.did.web.use.https=false
       - edc.ih.api.superuser.id=admin
@@ -141,13 +155,16 @@ services:
     container_name: provider-idhub
     image: identityhub-dev:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     depends_on:
       shared-postgres:
         condition: service_healthy
       shared-vault:
         condition: service_healthy
     ports:
-      - "1046:1045"         # debugger
       - "21000:80"          # did API           -> /
       - "21100:15151"       # identity API      -> /api/identity
       - "21500:9292"        # sts API           -> /api/sts
@@ -155,7 +172,7 @@ services:
     #      - "8181:8181"        # default API       -> /api
     #      - "9999:9999"        # statuslist API    -> /statuslist
     environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1045
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
       - edc.hostname=provider-idhub
       - edc.iam.did.web.use.https=false
       - edc.ih.api.superuser.id=admin
@@ -177,11 +194,15 @@ services:
     container_name: consumer-controlplane
     image: edc-controlplane-postgresql-hashicorp-vault:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
     environment:
       # NB: the compose `entrypoint:` override drops the Dockerfile's
       # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
       # is auto-applied by the JVM regardless of entrypoint.
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
       - edc.iam.did.web.use.https=false
       - edc.iam.sts.oauth.client.secret.alias=consumersecret
@@ -223,7 +244,6 @@ services:
         condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
-      - "5005:5005"   # Debugger
       - "29000:9000"  # Default port
       - "29010:9010"  # Management API
       - "29020:9020" # DSP API
@@ -234,11 +254,15 @@ services:
     container_name: consumer-dataplane
     image: edc-dataplane-hashicorp-vault:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
     environment:
       # NB: the compose `entrypoint:` override drops the Dockerfile's
       # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
       # is auto-applied by the JVM regardless of entrypoint.
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - web.http.public.port=9500
       - web.http.public.path=/public
       - web.http.management.port=9510
@@ -276,7 +300,6 @@ services:
         condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
-      - "5008:5005"   # Debugger
       - "9600:9500" # Public API
     networks:
       - fx-test-network
@@ -285,11 +308,15 @@ services:
     container_name: provider-controlplane
     image: edc-controlplane-postgresql-hashicorp-vault:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
     environment:
       # NB: the compose `entrypoint:` override drops the Dockerfile's
       # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
       # is auto-applied by the JVM regardless of entrypoint.
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - edc.iam.trusted-issuer.example.id=did:web:local-issuer-service:fx-issuer
       - edc.iam.did.web.use.https=false
       - edc.iam.sts.oauth.client.secret.alias=providersecret
@@ -331,7 +358,6 @@ services:
         condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
-      - "5006:5005"   # Debugger
       - "39000:9000"  # Default port
       - "39010:9010"  # Management API
       - "39020:9020" # DSP API
@@ -343,11 +369,15 @@ services:
     container_name: provider-dataplane
     image: edc-dataplane-hashicorp-vault:latest
     pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
     environment:
       # NB: the compose `entrypoint:` override drops the Dockerfile's
       # -javaagent flag, so the OTel agent must be re-added here. JAVA_TOOL_OPTIONS
       # is auto-applied by the JVM regardless of entrypoint.
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005 -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
       - web.http.public.port=9500
       - web.http.public.path=/public
       - web.http.management.port=9510
@@ -386,7 +416,6 @@ services:
         condition: service_healthy
     entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
     ports:
-      - "5007:5005"   # Debugger
       - "9500:9500" # Public API
     networks:
       - fx-test-network
