@@ -1,0 +1,191 @@
+import { group } from 'k6';
+import { CONFIG, POLL_INTERVAL_MS, POLL_TIMEOUT_MS, commonTags, ASSET_SELECTOR } from './config.js';
+import { postJson, getJson, pickDataset, offerIdFromDataset, extractEdr } from './http.js';
+import { pollUntil } from './poll.js';
+import { checkStatus, checkField } from './checks.js';
+import { m } from './metrics.js';
+
+// One transaction = one full DSP cycle through the CONSUMER Management API. The
+// consumer is a standard EDC in all three connectors, so this driver is uniform;
+// only config (URLs/DIDs/auth/seeding) differs. Request shapes mirror the proven
+// Bruno collection exactly.
+
+const tag = (phase) => Object.assign({}, commonTags, { phase });
+
+// 1. Catalog request -> offer id for the chosen asset.
+export function requestCatalog(assetId) {
+  const aid = assetId || ASSET_SELECTOR;
+  const body = {
+    '@context': { '@vocab': 'https://w3id.org/edc/v0.0.1/ns/' },
+    counterPartyAddress: CONFIG.providerDspAddress,
+    counterPartyId: CONFIG.providerId,
+    protocol: CONFIG.protocol,
+  };
+  const res = postJson(`${CONFIG.consumerManagementUrl}/v3/catalog/request`, body, 'catalog');
+  m.catalog.add(res.timings.duration, tag('catalog'));
+  if (!checkStatus(res, 'catalog')) return null;
+  const ds = pickDataset(res.json(), aid);
+  const offerId = offerIdFromDataset(ds);
+  if (!checkField({ offerId }, 'offerId', 'catalog')) return null;
+  return { offerId, assetId: (ds && ds['@id']) || aid };
+}
+
+// 2. Initiate contract negotiation -> negotiation id (async state machine).
+export function negotiate(offerId, assetId) {
+  const body = {
+    '@context': { '@vocab': 'https://w3id.org/edc/v0.0.1/ns/', odrl: 'http://www.w3.org/ns/odrl/2/' },
+    '@type': 'ContractRequest',
+    counterPartyAddress: CONFIG.providerDspAddress,
+    connectorId: CONFIG.providerId,
+    protocol: CONFIG.protocol,
+    policy: {
+      '@context': 'http://www.w3.org/ns/odrl.jsonld',
+      '@id': offerId,
+      '@type': 'Offer',
+      assigner: CONFIG.providerId,
+      assignee: CONFIG.consumerId,
+      target: assetId,
+    },
+  };
+  const res = postJson(`${CONFIG.consumerManagementUrl}/v3/contractnegotiations`, body, 'negotiation');
+  m.negotiationInit.add(res.timings.duration, tag('negotiation'));
+  if (!checkStatus(res, 'negotiation')) return null;
+  return res.json()['@id'];
+}
+
+// 3. Poll until AGREED. "Done" = a contractAgreementId appears (don't depend on
+//    the `state` spelling, which varies across implementations); use `state`
+//    only to detect *failure* (anything *TERMINATED*).
+export function awaitAgreement(negotiationId) {
+  const url = `${CONFIG.consumerManagementUrl}/v3/contractnegotiations/${negotiationId}`;
+  const r = pollUntil({
+    pollFn: () => getJson(url, 'negotiation-poll'),
+    isDone: (b) => b['contractAgreementId'] !== undefined && b['contractAgreementId'] !== null,
+    isFailed: (b) => String(b['state'] || '').toUpperCase().indexOf('TERMINAT') >= 0,
+    intervalMs: POLL_INTERVAL_MS,
+    timeoutMs: POLL_TIMEOUT_MS,
+    trend: m.timeToAgreed,
+    counter: m.negotiationPolls,
+    tags: tag('negotiation'),
+  });
+  return r.ok ? r.body['contractAgreementId'] : null;
+}
+
+// 4. Initiate transfer process -> transfer id (async).
+export function initTransfer(contractId) {
+  const body = {
+    '@context': { edc: 'https://w3id.org/edc/v0.0.1/ns/' },
+    '@type': 'TransferRequestDto',
+    protocol: CONFIG.protocol,
+    contractId: contractId,
+    counterPartyAddress: CONFIG.providerDspAddress,
+    connectorId: CONFIG.providerId,
+    transferType: CONFIG.transferType || 'HttpData-PULL',
+  };
+  const res = postJson(`${CONFIG.consumerManagementUrl}/v3/transferprocesses`, body, 'transfer');
+  m.transferInit.add(res.timings.duration, tag('transfer'));
+  if (!checkStatus(res, 'transfer')) return null;
+  return res.json()['@id'];
+}
+
+// 5. Poll until the EDR (token + endpoint) is available. The endpoint 404s until
+//    the transfer is STARTED — treat non-ready as "not done yet", not failure.
+export function awaitEdr(transferId) {
+  const url = `${CONFIG.consumerManagementUrl}/v3/edrs/${transferId}/dataaddress`;
+  const r = pollUntil({
+    pollFn: () => getJson(url, 'edr-poll'),
+    isDone: (b) => extractEdr(b).authorization !== null,
+    isFailed: null,
+    intervalMs: POLL_INTERVAL_MS,
+    timeoutMs: POLL_TIMEOUT_MS,
+    trend: m.timeToEdr,
+    counter: m.edrPolls,
+    tags: tag('transfer'),
+  });
+  return r.ok ? extractEdr(r.body) : null;
+}
+
+// 6. Pull the data. The EDR token is sent RAW as Authorization (NOT "Bearer ..."),
+//    matching the working Bruno flow. URL is the host-reachable public data-plane
+//    URL from config (the EDR's own `endpoint` is a docker-internal host that
+//    won't resolve from the k6 host) unless edr.useEdrEndpoint is set.
+export function pullData(edr, sizeHintBytes) {
+  const url = (CONFIG.edr && CONFIG.edr.useEdrEndpoint && edr.endpoint) ? edr.endpoint : (CONFIG.dataPlanePublicUrl || edr.endpoint);
+  const res = getJson(url, 'datapull', { Authorization: edr.authorization });
+  m.datapull.add(res.timings.duration, tag('datapull'));
+  const okStatus = checkStatus(res, 'datapull');
+  if (!okStatus) return null;
+  const bytes = (res.body && res.body.length) || sizeHintBytes || 0;
+  if (res.timings.duration > 0 && bytes > 0) {
+    m.throughput.add((bytes / 1e6) / (res.timings.duration / 1000), tag('datapull')); // MB/s
+  }
+  return res;
+}
+
+// Catalog -> negotiation -> transfer -> EDR (no pull). Used by payload-sweep to
+// establish a reusable EDR once in setup() and isolate the data plane.
+export function establishEdr(assetId) {
+  const cat = requestCatalog(assetId);
+  if (!cat) return null;
+  const negId = negotiate(cat.offerId, cat.assetId);
+  if (!negId) return null;
+  const agreementId = awaitAgreement(negId);
+  if (!agreementId) return null;
+  const transferId = initTransfer(agreementId);
+  if (!transferId) return null;
+  return awaitEdr(transferId);
+}
+
+// Catalog-only probe for the catalog-size sweep (G1.RQ6): issues ONE catalog
+// request (recording catalog_duration) and nothing else, isolating control-plane
+// catalog cost from the negotiation/transfer cycle as catalog size grows. Counts
+// success/failure like a single-phase transaction so the failed-rate threshold
+// still guards the run.
+export function catalogProbe(assetId) {
+  const cat = requestCatalog(assetId);
+  if (cat) {
+    m.succeeded.add(1, commonTags);
+    m.failedRate.add(false, commonTags);
+  } else {
+    const ft = Object.assign({}, commonTags, { failed_phase: 'catalog' });
+    m.failed.add(1, ft);
+    m.failedRate.add(true, ft);
+  }
+  return !!cat;
+}
+
+// The full transaction (one VU iteration). Short-circuits on the first failed
+// phase, tags WHERE it died (failed_phase) for the discussion chapter, and on
+// success records the composite end-to-end wall time.
+export function runTransaction(assetId) {
+  let okAll = false;
+  let failedPhase = 'none';
+  const t0 = Date.now();
+
+  group('dsp_transaction', () => {
+    const cat = requestCatalog(assetId);
+    if (!cat) { failedPhase = 'catalog'; return; }
+    const negId = negotiate(cat.offerId, cat.assetId);
+    if (!negId) { failedPhase = 'negotiation_init'; return; }
+    const agreementId = awaitAgreement(negId);
+    if (!agreementId) { failedPhase = 'negotiation'; return; }
+    const transferId = initTransfer(agreementId);
+    if (!transferId) { failedPhase = 'transfer_init'; return; }
+    const edr = awaitEdr(transferId);
+    if (!edr) { failedPhase = 'transfer'; return; }
+    const pulled = pullData(edr);
+    if (!pulled) { failedPhase = 'datapull'; return; }
+    okAll = true;
+  });
+
+  if (okAll) {
+    m.e2e.add(Date.now() - t0, commonTags);
+    m.succeeded.add(1, commonTags);
+    m.failedRate.add(false, commonTags);
+  } else {
+    const ft = Object.assign({}, commonTags, { failed_phase: failedPhase });
+    m.failed.add(1, ft);
+    m.failedRate.add(true, ft);
+  }
+  return okAll;
+}

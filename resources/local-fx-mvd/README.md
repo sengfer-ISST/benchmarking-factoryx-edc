@@ -76,3 +76,56 @@ docker compose down -v
 This will delete the data from your previous session and ensure, that the next time, you are starting this, you will
 have no data remnants in your containers, which may cause confusion or conflicts, when you start the docker-compose.yaml 
 and the requests of the Bruno collection later again. 
+
+## Troubleshooting
+
+### Transfer / GET EDR fails: `private key 'prov_priv' not found in Config`
+
+The `vault-init` container seeds four dataplane token-signing keys
+(`cons_priv`, `cons_pub`, `prov_priv`, `prov_pub`) into Vault. If a transfer
+fails with `JWSSigner cannot be generated for private key 'prov_priv'` (and the
+GET EDR then returns 404), those keys are missing from Vault.
+
+Two distinct causes:
+
+1. **`vault-init` failed silently.** On hosts whose `/etc/resolv.conf`
+   advertises a search domain (e.g. systemd-resolved adds `search localdomain`
+   on VMware/DHCP networks), Alpine/musl's resolver inside `vault-init` appends
+   it — resolving `shared-vault.localdomain` (NXDOMAIN) and failing with
+   `curl: (6) Could not resolve host: shared-vault`, while glibc-based
+   containers (EDC runtimes, Postgres) retry the bare name and are unaffected.
+   `vault-init.sh` now forces an absolute DNS name (trailing dot), runs with
+   `set -eu`, and waits for Vault to answer — so this fails loudly instead of
+   leaving Vault half-seeded.
+2. **Vault was restarted.** `shared-vault` runs in `-dev` (in-memory) mode, so
+   every restart wipes all secrets. The one-shot `vault-init` does **not**
+   re-run automatically.
+
+Re-seed the keys without restarting the dataplane (it reads the key from Vault
+per request):
+
+```
+docker compose -f docker-compose.yaml up --force-recreate --no-deps vault-init
+# or, for the monitoring superset:
+docker compose -f docker-compose.monitoring.yaml up --force-recreate --no-deps vault-init
+```
+
+## Monitoring (optional)
+
+An opt-in monitoring stack (node-exporter + OTel collector + Tempo + Prometheus
++ Grafana — host metrics plus per-API latency/throughput, JVM, and distributed
+traces from the EDC runtimes) is
+available as a standalone superset of `docker-compose.yaml`. Use
+`docker-compose.monitoring.yaml` *instead of* `docker-compose.yaml` — it brings
+up the full EDC stack plus the monitoring containers in a single invocation.
+See [`monitoring/PLAN.md`](./monitoring/PLAN.md) for the staged roadmap and
+[`monitoring/README.md`](./monitoring/README.md) for dashboards/usage.
+Quickstart:
+
+```
+docker compose -f docker-compose.monitoring.yaml up -d
+```
+
+Don't run both compose files at the same time — they share container names,
+host ports, and the `fx-test-network`, so they'll conflict.
+

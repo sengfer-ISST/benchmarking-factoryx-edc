@@ -1,0 +1,43 @@
+{
+  "name": "factoryx",
+  "serviceNamespace": "fx-mvd",
+
+  "consumerManagementUrl": "http://localhost:29010/management",
+  "providerManagementUrl": "http://localhost:39010/management",
+  "dataPlanePublicUrl": "http://localhost:9500/public",
+
+  "providerDspAddress": "http://provider-controlplane:9020/dsp",
+  "providerId": "did:web:provider-idhub:user:provider",
+  "consumerId": "did:web:consumer-idhub:user:consumer",
+  "protocol": "dataspace-protocol-http",
+  "transferType": "HttpData-PULL",
+
+  "auth": { "headerName": null, "headerValue": null },
+
+  "seed": {
+    "enabled": true,
+    "policyId": "aPolicy",
+    "assetId": "assetId",
+    "contractDefId": "1",
+    "assetName": "benchmark product description",
+    "assetContentType": "application/json",
+    "assetBaseUrl": "https://jsonplaceholder.typicode.com/users"
+  },
+
+  "catalog": { "assetIdSelector": "assetId" },
+
+  "edr": { "useEdrEndpoint": false },
+
+  "payload": {
+    "urlTemplate": null,
+    "note": "For the data-plane sweep, set urlTemplate to a sized source reachable FROM THE PROVIDER DATA-PLANE CONTAINER, e.g. http://host.docker.internal:8888/{size}.bin (see tools/gen-payloads.sh). {size} is replaced by PAYLOAD_SIZE."
+  },
+
+  "prometheus": { "baseUrl": "http://localhost:9090" },
+
+  "services": {
+    "sut": ["provider-controlplane", "provider-dataplane", "consumer-controlplane", "consumer-dataplane"],
+    "provider": ["provider-controlplane", "provider-dataplane"],
+    "consumer": ["consumer-controlplane", "consumer-dataplane"]
+  }
+}

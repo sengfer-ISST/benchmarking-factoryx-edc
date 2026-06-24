@@ -1,0 +1,385 @@
+# IDENTITY OFF (G2) parity deployment for Factory-X EDC.
+#
+# Counterpart to docker-compose.monitoring.yaml (the identity-ON / DCP stack +
+# monitoring). The varied factor is the control-plane identity layer: the control
+# planes run the iam-mock image
+#       edc-controlplane-postgresql-hashicorp-vault-iam-mock:latest
+# (DCP stack fx-dcp + did-validation replaced by org.eclipse.edc:iam-mock — same
+# stock mock used by benchmarking-EDC, so the two OFF baselines are comparable).
+# The whole DCP identity infrastructure is dropped: local-issuer-service and the
+# consumer/provider Identity Hubs. Postgres, Vault, the data planes, the contract
+# seed, and the entire monitoring stack are unchanged so identity is the only
+# varied factor.
+#
+# PREREQUISITE: build the iam-mock control-plane image first:
+#   ./gradlew :edc-controlplane:edc-controlplane-postgresql-hashicorp-vault-iam-mock:dockerize
+#
+# Run:  docker compose -f docker-compose-iam-mock.monitoring.yaml up -d
+#
+# ── KNOWN LIVE-ITERATION POINTS (Factory-X is the heaviest arm) ──────────────
+#  1. POLICY: iam-mock issues no MembershipCredential, so the seeded contract /
+#     access policies for this arm must be OPEN (no credential constraint),
+#     otherwise the policy engine denies negotiation. Seed open policies via the
+#     management API for the OFF run (fx-policy functions stay registered).
+#  2. DATA PLANE: the data plane image is the shared upstream Tractus-X dataplane
+#     (not rebuilt). Its edc.iam.* / STS config is removed here because the
+#     consumer-pull data path validates the EDR via the transfer-proxy key (from
+#     Vault), not via DCP. If the data plane refuses to boot or transfer without
+#     DCP config, build a mock data-plane variant the same way as the control
+#     plane, or retain minimal edc.iam stubs. Confirm during the smoke test.
+
+services:
+  shared-postgres:
+    container_name: shared-postgres
+    image: postgres:16.4-alpine
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - ./additional_config/pg_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -h 127.0.0.1 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      - fx-test-network
+
+  shared-vault:
+    container_name: shared-vault
+    image: vault:1.13.3
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command: server -dev -dev-root-token-id=vaultsecret0123456789 -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_ADDR: http://0.0.0.0:8200
+      SKIP_SETCAP: "true"
+      SKIP_CHOWN: "true"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 vault status >/dev/null 2>&1"]
+      interval: 4s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "8200:8200"
+    networks:
+      - fx-test-network
+
+  # Seeds the transfer-proxy key material the data planes need (cons_priv/pub,
+  # prov_priv/pub). Also seeds STS secrets that are unused in iam-mock mode.
+  vault-init:
+    container_name: vault-init
+    image: alpine:3.19
+    pull_policy: never
+    depends_on:
+      shared-vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://shared-vault:8200
+      VAULT_TOKEN: vaultsecret0123456789
+    volumes:
+      - ./additional_config/vault-init.sh:/scripts/init.sh:ro
+    entrypoint: [
+      "sh", "-c",
+      "apk add --no-check-certificate --no-cache curl jq openssl \
+       && tr -d '\r' < /scripts/init.sh > /tmp/init.sh \
+       && sh /tmp/init.sh"
+    ]
+    restart: "no"
+    networks:
+      - fx-test-network
+
+  consumer-controlplane:
+    container_name: consumer-controlplane
+    image: edc-controlplane-postgresql-hashicorp-vault-iam-mock:latest
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      # --- DCP block removed (identity OFF). iam-mock supplies the IdentityService. ---
+      - web.http.port=9000
+      - web.http.path=/api
+      - web.http.management.port=9010
+      - web.http.management.path=/management
+      - web.http.protocol.port=9020
+      - web.http.protocol.path=/dsp
+      - web.http.validation.port=9030
+      - web.http.validation.path=/validation
+      - web.http.control.port=9050
+      - web.http.control.path=/control
+      - edc.hostname=consumer-controlplane
+      # participant id kept identical to the ON arm so the Bruno/k6 harness is unchanged
+      - edc.participant.id=did:web:consumer-idhub:user:consumer
+      - edc.dsp.callback.address=http://consumer-controlplane:9020/dsp
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/cons_cpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      - OTEL_SERVICE_NAME=consumer-controlplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mock,service.instance.id=consumer-controlplane
+    volumes:
+      - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "29000:9000"  # Default port
+      - "29010:9010"  # Management API
+      - "29020:9020"  # DSP API
+    networks:
+      - fx-test-network
+
+  consumer-dataplane:
+    container_name: consumer-dataplane
+    image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - web.http.public.port=9500
+      - web.http.public.path=/public
+      - web.http.management.port=9510
+      - web.http.management.path=/management
+      - web.http.control.port=9550
+      - web.http.control.path=/control
+      - edc.hostname=consumer-dataplane
+      - edc.dpf.selector.url=http://consumer-controlplane:9050/control/v1/dataplanes
+      - edc.data.plane.self.unregistration=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/cons_dpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.transfer.proxy.token.signer.privatekey.alias=cons_priv
+      - edc.transfer.proxy.token.verifier.publickey.alias=cons_pub
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      # --- DCP/STS block removed (identity OFF). Data-pull validates the EDR via
+      #     the transfer-proxy key, not via DCP. See live-iteration note #2. ---
+      - OTEL_SERVICE_NAME=consumer-dataplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mock,service.instance.id=consumer-dataplane
+    volumes:
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "9600:9500" # Public API
+    networks:
+      - fx-test-network
+
+  provider-controlplane:
+    container_name: provider-controlplane
+    image: edc-controlplane-postgresql-hashicorp-vault-iam-mock:latest
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      # --- DCP block removed (identity OFF). iam-mock supplies the IdentityService. ---
+      - web.http.port=9000
+      - web.http.path=/api
+      - web.http.management.port=9010
+      - web.http.management.path=/management
+      - web.http.protocol.port=9020
+      - web.http.protocol.path=/dsp
+      - web.http.validation.port=9030
+      - web.http.validation.path=/validation
+      - web.http.control.port=9050
+      - web.http.control.path=/control
+      - edc.hostname=provider-controlplane
+      - edc.participant.id=did:web:provider-idhub:user:provider
+      - edc.dsp.callback.address=http://provider-controlplane:9020/dsp
+      - edc.sql.schema.autocreate=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/prov_cpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      - OTEL_SERVICE_NAME=provider-controlplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mock,service.instance.id=provider-controlplane
+    volumes:
+      - ./additional_config/logging.properties:/app/dataspaceconnector-configuration.properties
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "39000:9000"  # Default port
+      - "39010:9010"  # Management API
+      - "39020:9020"  # DSP API
+    networks:
+      - fx-test-network
+
+  provider-dataplane:
+    container_name: provider-dataplane
+    image: edc-dataplane-hashicorp-vault:latest
+    pull_policy: never
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms512m -Xmx768m -javaagent:/app/opentelemetry-javaagent.jar -Dotel.javaagent.configuration-file=/app/opentelemetry.properties
+      - web.http.public.port=9500
+      - web.http.public.path=/public
+      - web.http.management.port=9510
+      - web.http.management.path=/management
+      - web.http.control.port=9550
+      - web.http.control.path=/control
+      - edc.hostname=provider-dataplane
+      - edc.dpf.selector.url=http://provider-controlplane:9050/control/v1/dataplanes
+      - edc.data.plane.self.unregistration=true
+      - edc.datasource.default.url=jdbc:postgresql://shared-postgres:5432/prov_dpl
+      - edc.datasource.default.user=admin
+      - edc.datasource.default.password=password
+      - edc.transfer.proxy.token.signer.privatekey.alias=prov_priv
+      - edc.transfer.proxy.token.verifier.publickey.alias=prov_pub
+      - edc.vault.hashicorp.url=http://shared-vault:8200
+      - edc.vault.hashicorp.health.check.enabled=true
+      - edc.vault.hashicorp.token=vaultsecret0123456789
+      # --- DCP/STS block removed (identity OFF). See live-iteration note #2. ---
+      - OTEL_SERVICE_NAME=provider-dataplane
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=fx-mock,service.instance.id=provider-dataplane
+    volumes:
+      - ./additional_config/opentelemetry.properties:/app/opentelemetry.properties
+    depends_on:
+      shared-postgres:
+        condition: service_healthy
+      shared-vault:
+        condition: service_healthy
+    entrypoint: [ "java", "-jar", "edc-runtime.jar", "--log-level=DEBUG" ]
+    ports:
+      - "9500:9500" # Public API
+    networks:
+      - fx-test-network
+
+  # ---------------------------------------------------------------------------
+  # Monitoring stack (identical to the DCP arm so metrics are comparable)
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command:
+      - --config=/etc/otel-collector-config.yaml
+    volumes:
+      - ./monitoring/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP/gRPC ingest
+      - "8889:8889"   # Prometheus metrics endpoint
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  tempo:
+    container_name: tempo
+    image: grafana/tempo:2.6.0
+    command:
+      - -config.file=/etc/tempo.yaml
+    volumes:
+      - ./monitoring/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  node-exporter:
+    container_name: node-exporter
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - node-exporter
+      - otel-collector
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:11.2.0
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  tempo-data:
+
+networks:
+  fx-test-network:
+    name: fx-test-network
+    driver: bridge
