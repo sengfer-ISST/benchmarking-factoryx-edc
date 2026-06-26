@@ -45,7 +45,7 @@ edc-autodoc-plugin = { module = "org.eclipse.edc.autodoc:org.eclipse.edc.autodoc
 #edc-core-controlplane = { module = "org.eclipse.edc:control-plane-core", version.ref = "edc" }
 edc-junit = { module = "org.eclipse.edc:junit", version.ref = "edc" }
 edc-api-management-test-fixtures = { module = "org.eclipse.edc:management-api-test-fixtures", version.ref = "edc" }
-edc-iam-mock = { module = "org.eclipse.edc:iam-mock", version.ref = "edc" }
+# edc-iam-mock = { module = "org.eclipse.edc:iam-mock", version.ref = "edc" }
 edc-controlplane-contract = { module = "org.eclipse.edc:control-plane-contract", version.ref = "edc" }
 edc-core-connector = { module = "org.eclipse.edc:connector-core", version.ref = "edc" }
 edc-core-runtime = { module = "org.eclipse.edc:runtime-core", version.ref = "edc" }

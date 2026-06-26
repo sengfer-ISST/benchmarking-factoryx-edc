@@ -53,9 +53,6 @@ include(":edc-controlplane")
 include(":edc-controlplane:edc-controlplane-base")
 include(":edc-controlplane:edc-runtime-memory")
 include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault")
-// identity-OFF (iam-mock) control-plane variant — benchmarking G2 arm
-include(":edc-controlplane:edc-controlplane-base-iam-mock")
-include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault-iam-mock")
 
 // modules for dataplane artifacts
 include(":edc-dataplane")
