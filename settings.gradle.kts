@@ -39,6 +39,8 @@ include(":edc-extensions:did-validation:did-validation-core")
 include(":edc-extensions:did-validation:did-validation-api")
 include(":edc-extensions:fx-validator")
 include(":edc-extensions:contract-validation")
+// identity-OFF (benchmarking G2) — in-process mock identity providers
+include(":edc-extensions:fx-mock-identity")
 include(":edc-extensions:http-tls:http-tls-client")
 include(":edc-extensions:http-tls:http-tls-client-lib")
 include(":edc-extensions:http-tls:data-plane-http-tls")
@@ -53,6 +55,9 @@ include(":edc-controlplane")
 include(":edc-controlplane:edc-controlplane-base")
 include(":edc-controlplane:edc-runtime-memory")
 include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault")
+// identity-OFF (benchmarking G2) control-plane variant — mock identity instead of DCP
+include(":edc-controlplane:edc-controlplane-base-fxmock")
+include(":edc-controlplane:edc-controlplane-postgresql-hashicorp-vault-fxmock")
 
 // modules for dataplane artifacts
 include(":edc-dataplane")
