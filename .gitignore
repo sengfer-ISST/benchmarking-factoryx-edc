@@ -84,8 +84,15 @@ fabric.properties
 # Ignore Gradle GUI config
 gradle-app.setting
 
-# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+# Package Files — ignore all jars...
+*.jar
+
+# ...except the Gradle wrapper jar and the OpenTelemetry Java agent.
+# The OTel agent is bind-mounted by the docker-compose monitoring stack and must
+# ship with the repo so it is present after a git pull / WinSCP sync on the
+# server. (Copies under **/build/ stay ignored: that dir is excluded above.)
 !gradle-wrapper.jar
+!opentelemetry-javaagent.jar
 
 # Cache of project
 .gradletasknamecache
