@@ -16,7 +16,12 @@ cd "$ROOT"
 CONNECTOR="${1:?usage: run.sh <connector> <scenario>}"
 SCENARIO="${2:?usage: run.sh <connector> <scenario>}"
 CONFIG_PATH="$ROOT/config/${CONNECTOR}.json"
-SCRIPT="$ROOT/scenarios/${SCENARIO}.js"
+# SCENARIO_DIR: alternate scenario dir for drivers that REPLACE the shared harness
+# (the BaSyx identity-OFF raw-DSP driver in basyx-off/ has no EDC consumer).
+# Running it through here gives the OFF arm the same warmup/snapshot/meta.json
+# treatment as every other arm instead of a bare `k6 run`.
+SCENARIO_DIR="${SCENARIO_DIR:-scenarios}"
+SCRIPT="$ROOT/${SCENARIO_DIR}/${SCENARIO}.js"
 [ -f "$CONFIG_PATH" ] || { echo "ERROR: no config $CONFIG_PATH"; exit 1; }
 [ -f "$SCRIPT" ]      || { echo "ERROR: no scenario $SCRIPT"; exit 1; }
 command -v k6   >/dev/null || { echo "ERROR: k6 not installed (https://k6.io/docs/get-started/installation/)"; exit 1; }
@@ -25,7 +30,11 @@ command -v curl >/dev/null || { echo "ERROR: curl not installed"; exit 1; }
 
 # --- knobs (env-overridable) ---
 POLL_INTERVAL_MS="${POLL_INTERVAL_MS:-250}"
-IDENTITY_MODE="${IDENTITY_MODE:-on}"        # G1.RQ5 factor: on|off (the DEPLOYMENT differs, not the driver)
+if [ "$SCENARIO_DIR" = "scenarios" ]; then
+  IDENTITY_MODE="${IDENTITY_MODE:-on}"      # G1.RQ5 factor: on|off (the DEPLOYMENT differs, not the driver)
+else
+  IDENTITY_MODE="${IDENTITY_MODE:-off}"     # an alternate dir IS the OFF-arm driver; never let its samples default to on
+fi
 CATALOG_SIZE="${CATALOG_SIZE:-1}"           # G1.RQ6: # provider assets to seed (catalog-sweep only)
 WARMUP_DURATION="${WARMUP_DURATION:-60s}"
 WARMUP_RATE="${WARMUP_RATE:-2}"
@@ -45,11 +54,23 @@ if [ -n "$CANONICAL_DIR" ]; then
 fi
 
 # --- 2. health gate (read-only) ---
-CONSUMER_MGMT="$(jq -r '.consumerManagementUrl' "$CONFIG_PATH")"
-echo -n "Health: consumer mgmt + prometheus "
+# Shared harness: gate on the consumer Management API. Alternate driver dirs have
+# no EDC consumer -> gate on the provider DSP endpoint + callback sink (.off.*).
+# "Up" = any HTTP status (4xx from an unauthenticated probe still proves a listener).
+if [ "$SCENARIO_DIR" = "scenarios" ]; then
+  mapfile -t HEALTH_URLS < <(jq -r '[.consumerManagementUrl] | map(select(.))[]' "$CONFIG_PATH")
+else
+  mapfile -t HEALTH_URLS < <(jq -r '[.off.providerDspBase, (if .off.sinkPollBase then .off.sinkPollBase + "/health" else null end)] | map(select(.))[]' "$CONFIG_PATH")
+fi
+[ "${#HEALTH_URLS[@]}" -gt 0 ] || { echo "ERROR: no health URLs in $CONFIG_PATH for SCENARIO_DIR=$SCENARIO_DIR"; exit 3; }
+responding() { [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$1" || echo 000)" != "000" ]; }
+all_up() {
+  local u; for u in "${HEALTH_URLS[@]}"; do responding "$u" || return 1; done
+  curl -sf -m 3 "$PROM_URL/-/ready" >/dev/null 2>&1
+}
+echo -n "Health: ${HEALTH_URLS[*]} + prometheus "
 deadline=$(( $(date +%s) + 90 ))
-until [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$CONSUMER_MGMT" || echo 000)" != "000" ] \
-   && curl -sf -m 3 "$PROM_URL/-/ready" >/dev/null 2>&1; do
+until all_up; do
   [ "$(date +%s)" -ge "$deadline" ] && { echo "- TIMEOUT (is the stack up? is Prometheus at $PROM_URL?)"; exit 3; }
   echo -n "."; sleep 2
 done
@@ -63,7 +84,7 @@ if [ "$SKIP_WARMUP" != "1" ]; then
     -e CONNECTOR="$CONNECTOR" -e SCENARIO=warmup -e RATE="$WARMUP_RATE" -e DURATION="$WARMUP_DURATION" \
     -e POLL_INTERVAL_MS="$POLL_INTERVAL_MS" -e IDENTITY_MODE="$IDENTITY_MODE" -e RESULT_DIR="$WARMUP_DIR" \
     --tag phase=warmup \
-    "$ROOT/scenarios/steady.js" >/dev/null 2>&1 || echo "  (warmup non-zero exit ignored)"
+    "$ROOT/$SCENARIO_DIR/steady.js" >/dev/null 2>&1 || echo "  (warmup non-zero exit ignored)"
   rm -rf "$WARMUP_DIR"
 fi
 
@@ -92,14 +113,14 @@ END_EPOCH="$(date -u +%s)"
 
 # --- 6. meta.json (params + provenance) ---
 jq -n \
-  --arg connector "$CONNECTOR" --arg scenario "$SCENARIO" --arg ts "$TS" \
+  --arg connector "$CONNECTOR" --arg scenario "$SCENARIO" --arg sdir "$SCENARIO_DIR" --arg ts "$TS" \
   --arg poll "$POLL_INTERVAL_MS" --arg start "$START_EPOCH" --arg end "$END_EPOCH" \
   --arg idmode "$IDENTITY_MODE" --arg catsize "$CATALOG_SIZE" \
   --arg promwin "$PROM_RATE_WINDOW" --arg promurl "$PROM_URL" \
   --arg k6ver "$(k6 version 2>/dev/null | head -1)" --arg k6exit "$K6_EXIT" \
   --arg gitsha "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo n/a)" \
   --arg rw "${K6_PROMETHEUS_RW_SERVER_URL:-none}" \
-  '{connector:$connector, scenario:$scenario, run_id:$ts,
+  '{connector:$connector, scenario:$scenario, scenario_dir:$sdir, run_id:$ts,
     poll_interval_ms:($poll|tonumber), identity_mode:$idmode, catalog_size:($catsize|tonumber),
     start_epoch:($start|tonumber), end_epoch:($end|tonumber),
     prometheus:{url:$promurl, rate_window:$promwin, remote_write:$rw},

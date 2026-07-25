@@ -20,7 +20,10 @@ SVC="$(jq -r '.services.sut | join("|")' "$CONFIG_PATH")"
 
 # query_range -> CSV(series,timestamp,value). Header always written; rows appended.
 q() {
-  local name="$1" expr="$2" f="$RESULT_DIR/$name.csv"
+  # NB: two `local` statements — in one statement bash expands ALL args before
+  # any assignment, so $name would still be unset (set -u aborts).
+  local name="$1" expr="$2"
+  local f="$RESULT_DIR/$name.csv"
   echo "series,timestamp,value" > "$f"
   curl -sG "$PROM_URL/api/v1/query_range" \
     --data-urlencode "query=$expr" \

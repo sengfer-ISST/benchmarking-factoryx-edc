@@ -53,14 +53,20 @@ export function negotiate(offerId, assetId) {
   return res.json()['@id'];
 }
 
-// 3. Poll until AGREED. "Done" = a contractAgreementId appears (don't depend on
-//    the `state` spelling, which varies across implementations); use `state`
-//    only to detect *failure* (anything *TERMINATED*).
+// 3. Poll until the negotiation is FINALIZED (not merely AGREED). The
+//    contractAgreementId is populated at AGREED, but the DSP state machine still
+//    runs AGREED -> VERIFIED -> FINALIZED, and a provider rejects a transfer against
+//    an agreement that isn't FINALIZED on its side ("Agreement record is not in
+//    FINALIZED state" -> 400 -> fatal, no EDR). The consumer reaching FINALIZED
+//    implies the provider finalized first, so it's the correct pre-transfer gate.
+//    All three connectors use a standard EDC consumer, so state=="FINALIZED" is
+//    uniform. Failure is still any *TERMINATED* state.
 export function awaitAgreement(negotiationId) {
   const url = `${CONFIG.consumerManagementUrl}/v3/contractnegotiations/${negotiationId}`;
   const r = pollUntil({
     pollFn: () => getJson(url, 'negotiation-poll'),
-    isDone: (b) => b['contractAgreementId'] !== undefined && b['contractAgreementId'] !== null,
+    isDone: (b) => String(b['state'] || '').toUpperCase().indexOf('FINALIZED') >= 0
+                   && b['contractAgreementId'] != null,
     isFailed: (b) => String(b['state'] || '').toUpperCase().indexOf('TERMINAT') >= 0,
     intervalMs: POLL_INTERVAL_MS,
     timeoutMs: POLL_TIMEOUT_MS,
