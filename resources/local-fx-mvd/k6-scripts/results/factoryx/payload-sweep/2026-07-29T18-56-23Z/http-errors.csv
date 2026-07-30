@@ -1,0 +1,9 @@
+series,timestamp,value
+"consumer-controlplane",1785351448,"21.2"
+"consumer-controlplane",1785351453,"22.799999999999997"
+"consumer-controlplane",1785351458,"22.618181818181817"
+"consumer-controlplane",1785351463,"20.07272727272727"
+"provider-controlplane",1785351448,"0"
+"provider-controlplane",1785351453,"0"
+"provider-controlplane",1785351458,"0.05454545454545454"
+"provider-controlplane",1785351463,"0.05454545454545454"

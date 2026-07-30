@@ -1,0 +1,27 @@
+{
+  "connector": "factoryx",
+  "scenario": "catalog-sweep",
+  "scenario_dir": "scenarios",
+  "run_id": "2026-07-29T18-34-13Z",
+  "poll_interval_ms": 250,
+  "identity_mode": "on",
+  "catalog_size": 1000,
+  "start_epoch": 1785350119,
+  "end_epoch": 1785350257,
+  "prometheus": {
+    "url": "http://localhost:9090",
+    "rate_window": "1m",
+    "remote_write": "none"
+  },
+  "k6": {
+    "version": "k6 v2.1.0+dirty (commit/83a87a41e2-dirty, go1.26.5, linux/amd64)",
+    "exit_code": 0
+  },
+  "git_sha": "addd8c2",
+  "env": {
+    "RATE": null,
+    "DURATION": null,
+    "MAX_VUS": null,
+    "PAYLOAD_SIZE": null
+  }
+}

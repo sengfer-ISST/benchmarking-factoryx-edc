@@ -1,0 +1,40 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/scenarios/payload-sweep.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 4 max VUs, 2m30s max duration (incl. graceful stop):
+              * pull: 4 looping VUs for 2m0s (gracefulStop: 30s)
+
+
+================ DSP benchmark summary ================
+-- per-phase latency --
+  catalog                    p50=160.4 ms  p95=160.4 ms  p99=160.4 ms  max=160.4 ms  n=1
+  negotiation init (POST)    (no data)
+  time-to-AGREED (async)     (no data)
+  transfer init (POST)       (no data)
+  time-to-EDR (async)        (no data)
+  data pull                  (no data)
+-- end-to-end + throughput --
+  e2e transaction            (no data)
+  data throughput (MB/s)     (no data)
+-- outcomes --
+  transactions succeeded     (no data)
+  transactions failed        (no data)
+  failed rate                rate=0.00%  (pass=0 fail=0)
+-- observer effect (poll load) --
+  negotiation polls          (no data)
+  edr polls                  (no data)
+=======================================================
+(full summary -> /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/results/factoryx/payload-sweep/2026-07-29T19-05-55Z/k6-summary.json; POLL_INTERVAL_MS=250; IDENTITY_MODE=on)
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+time="2026-07-29T19:07:01Z" level=error msg="GoError: the body is null so we can't transform it to JSON - this likely was because of a request error getting the response\n\tat reflect.methodValueCall (native)\n\tat requestCatalog (file:///home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/lib/flow.js:27:34(56))\n\tat establishEdr (file:///home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/lib/flow.js:134:29(4))\n\tat setup (file:///home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/scenarios/payload-sweep.js:45:27(33))\n" hint="script exception" source=stacktrace

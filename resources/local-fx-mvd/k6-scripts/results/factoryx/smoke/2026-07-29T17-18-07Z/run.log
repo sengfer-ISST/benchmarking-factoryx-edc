@@ -1,0 +1,105 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/scenarios/smoke.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 5m30s max duration (incl. graceful stop):
+              * smoke: 5 iterations for each of 1 VUs (maxDuration: 5m0s, gracefulStop: 30s)
+
+
+running (0m01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+smoke   [   0% ] 1 VUs  0m01.0s/5m0s  0/5 iters, 5 per VU
+
+running (0m02.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+smoke   [   0% ] 1 VUs  0m02.0s/5m0s  0/5 iters, 5 per VU
+
+running (0m03.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+smoke   [   0% ] 1 VUs  0m03.0s/5m0s  0/5 iters, 5 per VU
+
+running (0m04.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+smoke   [   0% ] 1 VUs  0m04.0s/5m0s  0/5 iters, 5 per VU
+
+running (0m05.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+smoke   [   0% ] 1 VUs  0m05.0s/5m0s  0/5 iters, 5 per VU
+
+running (0m06.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+smoke   [  20% ] 1 VUs  0m06.0s/5m0s  1/5 iters, 5 per VU
+
+running (0m07.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+smoke   [  20% ] 1 VUs  0m07.0s/5m0s  1/5 iters, 5 per VU
+
+running (0m08.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+smoke   [  20% ] 1 VUs  0m08.0s/5m0s  1/5 iters, 5 per VU
+
+running (0m09.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+smoke   [  20% ] 1 VUs  0m09.0s/5m0s  1/5 iters, 5 per VU
+
+running (0m10.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+smoke   [  40% ] 1 VUs  0m10.0s/5m0s  2/5 iters, 5 per VU
+
+running (0m11.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+smoke   [  40% ] 1 VUs  0m11.0s/5m0s  2/5 iters, 5 per VU
+
+running (0m12.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+smoke   [  40% ] 1 VUs  0m12.0s/5m0s  2/5 iters, 5 per VU
+
+running (0m13.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+smoke   [  40% ] 1 VUs  0m13.0s/5m0s  2/5 iters, 5 per VU
+
+running (0m14.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+smoke   [  60% ] 1 VUs  0m14.0s/5m0s  3/5 iters, 5 per VU
+
+running (0m15.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+smoke   [  60% ] 1 VUs  0m15.0s/5m0s  3/5 iters, 5 per VU
+
+running (0m16.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+smoke   [  60% ] 1 VUs  0m16.0s/5m0s  3/5 iters, 5 per VU
+
+running (0m17.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+smoke   [  60% ] 1 VUs  0m17.0s/5m0s  3/5 iters, 5 per VU
+
+running (0m18.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+smoke   [  60% ] 1 VUs  0m18.0s/5m0s  3/5 iters, 5 per VU
+
+running (0m19.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+smoke   [  80% ] 1 VUs  0m19.0s/5m0s  4/5 iters, 5 per VU
+
+running (0m20.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+smoke   [  80% ] 1 VUs  0m20.0s/5m0s  4/5 iters, 5 per VU
+
+running (0m21.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+smoke   [  80% ] 1 VUs  0m21.0s/5m0s  4/5 iters, 5 per VU
+
+running (0m22.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+smoke   [  80% ] 1 VUs  0m22.0s/5m0s  4/5 iters, 5 per VU
+
+================ DSP benchmark summary ================
+-- per-phase latency --
+  catalog                    p50=67.4 ms  p95=84.2 ms  p99=86.9 ms  max=87.6 ms  n=5
+  negotiation init (POST)    p50=7.3 ms  p95=7.3 ms  p99=7.3 ms  max=7.3 ms  n=5
+  time-to-AGREED (async)     p50=2802.0 ms  p95=3012.8 ms  p99=3053.8 ms  max=3064.0 ms  n=5
+  transfer init (POST)       p50=81.3 ms  p95=104.3 ms  p99=106.3 ms  max=106.8 ms  n=5
+  time-to-EDR (async)        p50=1275.0 ms  p95=1986.8 ms  p99=2027.8 ms  max=2038.0 ms  n=5
+  data pull                  p50=25.5 ms  p95=27.2 ms  p99=27.5 ms  max=27.5 ms  n=5
+-- end-to-end + throughput --
+  e2e transaction            p50=4273.0 ms  p95=4921.4 ms  p99=5006.7 ms  max=5028.0 ms  n=5
+  data throughput (MB/s)     p50=0.2  p95=0.2  p99=0.2  max=0.2  n=5
+-- outcomes --
+  transactions succeeded     count=5  rate=0.225/s
+  transactions failed        (no data)
+  failed rate                rate=0.00%  (pass=0 fail=5)
+-- observer effect (poll load) --
+  negotiation polls          count=59  rate=2.650/s
+  edr polls                  count=35  rate=1.572/s
+=======================================================
+(full summary -> /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/results/factoryx/smoke/2026-07-29T17-18-07Z/k6-summary.json; POLL_INTERVAL_MS=250; IDENTITY_MODE=on)
+
+running (0m22.3s), 0/1 VUs, 5 complete and 0 interrupted iterations
+smoke ✓ [ 100% ] 1 VUs  0m22.2s/5m0s  5/5 iters, 5 per VU

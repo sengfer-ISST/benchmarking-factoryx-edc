@@ -1,0 +1,5 @@
+series,timestamp,value
+"node-exporter:9100",1785351040,"9294.9453125"
+"node-exporter:9100",1785351045,"9253.328125"
+"node-exporter:9100",1785351050,"9117.59375"
+"node-exporter:9100",1785351055,"9086.109375"
