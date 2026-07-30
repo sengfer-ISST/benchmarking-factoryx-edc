@@ -439,6 +439,12 @@ services:
       - "9500:9500" # Public API
     networks:
       - fx-test-network
+    # The data plane FETCHES the asset's baseUrl itself, so the payload-sweep
+    # source (tools/gen-payloads.sh, served on the host) must resolve from inside
+    # THIS container — not just from the k6 host. On Linux `host.docker.internal`
+    # is not built in and has to be mapped explicitly.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ---------------------------------------------------------------------------
   # Monitoring stack
@@ -514,6 +520,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
       - --web.enable-lifecycle
+      # Accept k6's metric stream (--out experimental-prometheus-rw). Without this the
+      # ONLY record of transaction success/failure is k6's end-of-run summary, so no
+      # dashboard can show a workflow failure while it is happening.
+      - --web.enable-remote-write-receiver
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus

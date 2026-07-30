@@ -1,19 +1,18 @@
 {
   "name": "factoryx",
   "serviceNamespace": "fx-mvd",
-
   "consumerManagementUrl": "http://localhost:29010/management",
   "providerManagementUrl": "http://localhost:39010/management",
   "dataPlanePublicUrl": "http://localhost:9500/public",
-
   "providerDspAddress": "http://provider-controlplane:9020/dsp",
   "providerId": "did:web:provider-idhub:user:provider",
   "consumerId": "did:web:consumer-idhub:user:consumer",
   "protocol": "dataspace-protocol-http",
   "transferType": "HttpData-PULL",
-
-  "auth": { "headerName": null, "headerValue": null },
-
+  "auth": {
+    "headerName": null,
+    "headerValue": null
+  },
   "seed": {
     "enabled": true,
     "policyId": "aPolicy",
@@ -23,21 +22,34 @@
     "assetContentType": "application/json",
     "assetBaseUrl": "https://jsonplaceholder.typicode.com/users"
   },
-
-  "catalog": { "assetIdSelector": "assetId" },
-
-  "edr": { "useEdrEndpoint": false },
-
-  "payload": {
-    "urlTemplate": null,
-    "note": "For the data-plane sweep, set urlTemplate to a sized source reachable FROM THE PROVIDER DATA-PLANE CONTAINER, e.g. http://host.docker.internal:8888/{size}.bin (see tools/gen-payloads.sh). {size} is replaced by PAYLOAD_SIZE."
+  "catalog": {
+    "assetIdSelector": "assetId"
   },
-
-  "prometheus": { "baseUrl": "http://localhost:9090" },
-
+  "edr": {
+    "useEdrEndpoint": false
+  },
+  "payload": {
+    "applicable": true,
+    "urlTemplate": "http://host.docker.internal:8888/{size}.bin",
+    "note": "Sized source served on the HOST by tools/gen-payloads.sh (python3 -m http.server 8888). The provider data plane fetches it itself, so the name must resolve INSIDE that container: docker-compose*.monitoring.yaml maps host.docker.internal -> host-gateway on provider-dataplane."
+  },
+  "prometheus": {
+    "baseUrl": "http://localhost:9090"
+  },
   "services": {
-    "sut": ["provider-controlplane", "provider-dataplane", "consumer-controlplane", "consumer-dataplane"],
-    "provider": ["provider-controlplane", "provider-dataplane"],
-    "consumer": ["consumer-controlplane", "consumer-dataplane"]
+    "sut": [
+      "provider-controlplane",
+      "provider-dataplane",
+      "consumer-controlplane",
+      "consumer-dataplane"
+    ],
+    "provider": [
+      "provider-controlplane",
+      "provider-dataplane"
+    ],
+    "consumer": [
+      "consumer-controlplane",
+      "consumer-dataplane"
+    ]
   }
 }

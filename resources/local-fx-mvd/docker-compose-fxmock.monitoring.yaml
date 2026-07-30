@@ -307,6 +307,9 @@ services:
       - "9500:9500"
     networks:
       - fx-test-network
+    # Payload-sweep source must resolve from inside the data plane — see the ON arm.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ---------------------------------------------------------------------------
   # Monitoring stack — identical to the ON arm so metrics are comparable.
@@ -367,6 +370,10 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
       - --web.enable-lifecycle
+      # Accept k6's metric stream (--out experimental-prometheus-rw). Without this the
+      # ONLY record of transaction success/failure is k6's end-of-run summary, so no
+      # dashboard can show a workflow failure while it is happening.
+      - --web.enable-remote-write-receiver
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus

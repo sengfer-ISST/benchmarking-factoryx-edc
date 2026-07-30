@@ -16,8 +16,26 @@ export function postJson(url, body, phase) {
   return http.post(url, JSON.stringify(body), { headers: headers(), tags: { phase } });
 }
 
-export function getJson(url, phase, extraHeaders) {
-  return http.get(url, { headers: headers(extraHeaders), tags: { phase } });
+// `opts.discardBody` sets responseType per REQUEST rather than via the global
+// `discardResponseBodies` option. The global switch nulls EVERY body in the VM —
+// including the catalog response parsed in setup() — which silently turns
+// `res.json()` into "the body is null" (this cost the payload-sweep 15 runs).
+// Scoping it to the one request that streams 100 MB keeps the control-plane
+// JSON parseable everywhere else.
+export function getJson(url, phase, extraHeaders, opts) {
+  const params = { headers: headers(extraHeaders), tags: { phase } };
+  if (opts && opts.discardBody) params.responseType = 'none';
+  return http.get(url, params);
+}
+
+// Bytes actually transferred. With a discarded body `res.body` is null, so fall
+// back to Content-Length and only then to the caller's hint — a throughput
+// figure computed from a hint that was never set would be a silent zero.
+export function responseBytes(res, hintBytes) {
+  if (res && res.body && res.body.length) return res.body.length;
+  const cl = res && res.headers && (res.headers['Content-Length'] || res.headers['content-length']);
+  if (cl && Number(cl) > 0) return Number(cl);
+  return hintBytes || 0;
 }
 
 // ---- JSON-LD parse helpers (tolerant of single-object-vs-array & prefixes) ----

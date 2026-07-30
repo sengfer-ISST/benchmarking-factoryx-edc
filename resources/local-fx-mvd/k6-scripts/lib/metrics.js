@@ -12,11 +12,23 @@ export const m = {
   timeToEdr: new Trend('time_to_edr', true),
   datapull: new Trend('datapull_duration', true),
   throughput: new Trend('data_throughput_MBps'),
+  // Bytes actually observed per pull. Guards against a throughput figure computed
+  // from an unset size hint, which silently reads as zero rather than as missing.
+  payloadBytes: new Trend('datapull_bytes'),
   e2e: new Trend('e2e_transaction_duration', true),
 
   succeeded: new Counter('dsp_transactions_succeeded'),
   failed: new Counter('dsp_transactions_failed'),
   failedRate: new Rate('dsp_transaction_failed_rate'),
+  // Same count as `failed`, but tagged failed_reason=<terminal state>. Separates
+  // provider rejections from capacity timeouts — one is a defect, the other a limit.
+  failureReason: new Counter('dsp_failure_reason'),
+  // Coarse split of the same failures. handleSummary() cannot break a counter down
+  // by tag (k6 only materializes submetrics declared in thresholds), so the two
+  // classes get their own counters to stay readable in the terminal summary; the
+  // fine-grained state name remains on dsp_failure_reason for Grafana.
+  failedTerminated: new Counter('dsp_failures_terminated'),
+  failedTimeout: new Counter('dsp_failures_timeout'),
 
   negotiationPolls: new Counter('negotiation_polls'),
   edrPolls: new Counter('edr_polls'),
@@ -50,6 +62,22 @@ function statLine(label, name, data, isTime) {
 
 function num(x) { return (x === undefined || x === null) ? '-' : Number(x).toFixed(1); }
 
+// Polls per attempted transaction. At a 250 ms interval a healthy EDR wait costs
+// a handful; a value near timeout/interval means transactions are sitting out the
+// full deadline, i.e. the run is past the knee. This single ratio is the cheapest
+// overload signal in the summary — WATCH IT before trusting any latency number.
+function pollRatioLine(data) {
+  const g = (n) => (data.metrics[n] && data.metrics[n].values && data.metrics[n].values.count) || 0;
+  const attempts = g('dsp_transactions_succeeded') + g('dsp_transactions_failed');
+  if (!attempts) return '  polls per transaction     (no data)';
+  const interval = Number(__ENV.POLL_INTERVAL_MS || 250);
+  const ceiling = Math.round(Number(__ENV.POLL_TIMEOUT_MS || 30000) / interval);
+  const edr = g('edr_polls') / attempts;
+  const neg = g('negotiation_polls') / attempts;
+  const warn = edr > ceiling * 0.5 ? `  <-- WARNING: near the ${ceiling}-poll timeout ceiling; system is past its knee` : '';
+  return `  polls per transaction     negotiation=${neg.toFixed(1)}  edr=${edr.toFixed(1)}  (timeout ceiling=${ceiling})${warn}`;
+}
+
 function renderText(data) {
   const L = [];
   L.push('');
@@ -68,9 +96,12 @@ function renderText(data) {
   L.push(statLine('transactions succeeded', 'dsp_transactions_succeeded', data, false));
   L.push(statLine('transactions failed', 'dsp_transactions_failed', data, false));
   L.push(statLine('failed rate', 'dsp_transaction_failed_rate', data, false));
+  L.push(statLine('  of which TERMINATED', 'dsp_failures_terminated', data, false));
+  L.push(statLine('  of which TIMED OUT', 'dsp_failures_timeout', data, false));
   L.push('-- observer effect (poll load) --');
   L.push(statLine('negotiation polls', 'negotiation_polls', data, false));
   L.push(statLine('edr polls', 'edr_polls', data, false));
+  L.push(pollRatioLine(data));
   L.push('=======================================================');
   L.push(`(full summary -> ${__ENV.RESULT_DIR || '.'}/k6-summary.json; POLL_INTERVAL_MS=${__ENV.POLL_INTERVAL_MS || 250}; IDENTITY_MODE=${__ENV.IDENTITY_MODE || 'on'})`);
   L.push('');

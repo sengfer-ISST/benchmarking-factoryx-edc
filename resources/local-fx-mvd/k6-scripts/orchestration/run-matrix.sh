@@ -5,14 +5,25 @@
 # Prometheus, which would cross-contaminate.
 #
 #   run-matrix.sh <connector> [reps] [scenario ...]
-#   defaults: reps=3, scenarios="smoke steady saturation-open concurrency-closed"
+#   defaults: reps=2, scenarios="smoke steady saturation-open concurrency-closed"
+#
+# REPS=2 is a wall-clock compromise (~40 min/arm cheaper than 3, ~4 h over the six
+# arms). It costs statistical power: two points give a median that is just their
+# mean and an interquartile range that is not meaningful, so a scenario reported
+# with n=2 cannot carry a variability claim. For the head-to-head RQ1 comparison,
+# run `steady` at 3 separately -- it is the cheapest of the long scenarios and the
+# one whose spread actually gets reported:
+#   ./orchestration/run-matrix.sh <connector> 3 steady
+# Alternative if wall clock is the binding constraint: keep 3 reps and shorten the
+# windows instead (STAGE_DURATION=90s DURATION=5m), which costs about the same time
+# as dropping to 2 but preserves the repetition count.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 
 CONNECTOR="${1:?usage: run-matrix.sh <connector> [reps] [scenario ...]}"; shift || true
-REPS="${1:-3}"; shift || true
+REPS="${1:-2}"; shift || true
 SCENARIOS=("$@")
 [ "${#SCENARIOS[@]}" -eq 0 ] && SCENARIOS=(smoke steady saturation-open concurrency-closed)
 CATALOG_SIZES="${CATALOG_SIZES:-1 10 100 1000}"   # G1.RQ6: catalog-sweep is run once per size

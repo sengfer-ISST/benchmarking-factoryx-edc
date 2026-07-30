@@ -1,111 +1,621 @@
 {
-  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "links": [],
   "liveNow": false,
   "panels": [
-    {"type": "row", "title": "HTTP server — RED (rate / errors / duration), per route per runtime", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}, "id": 100, "collapsed": false},
-
     {
-      "type": "timeseries", "title": "Request rate (req/s) per runtime",
+      "id": 199,
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "title": "k6 workload outcome \u2014 does the WORKFLOW complete? (needs k6 remote-write)"
+    },
+    {
+      "id": 200,
+      "type": "timeseries",
+      "title": "Transaction outcome (tx/s) \u2014 THE run verdict",
+      "description": "Completed vs failed DSP transactions per second. If 'failed' is non-zero while the HTTP panels below look healthy, the connector's API is fine and its ASYNC WORKFLOW is not. This is the panel the first campaign did not have.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"k6_dsp_transactions_succeeded(_total)?\"}[$__rate_interval]))",
+          "legendFormat": "succeeded",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"k6_dsp_transactions_failed(_total)?\"}[$__rate_interval]))",
+          "legendFormat": "failed",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 201,
+      "type": "timeseries",
+      "title": "Failures by phase and reason",
+      "description": "dsp_failure_reason, tagged failed_phase (where it died) and failed_reason (terminated_<STATE> = the connector rejected it; timeout_in_<STATE> = the state machine never got to it, i.e. a capacity limit). These two demand different conclusions.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (failed_phase, failed_reason) (rate({__name__=~\"k6_dsp_failure_reason(_total)?\"}[$__rate_interval]))",
+          "legendFormat": "{{failed_phase}} / {{failed_reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 202,
+      "type": "timeseries",
+      "title": "EDR polls per transaction (overload indicator)",
+      "description": "edr_polls / attempted transactions. At the default 250 ms interval and 30 s timeout the ceiling is 120 polls: a healthy wait costs single digits, and a value near the ceiling means transactions are timing out rather than completing. Also quantifies the polling observer effect on the consumer Management API.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"k6_edr_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_succeeded(_total)?\"}[$__rate_interval])) + sum(rate({__name__=~\"k6_dsp_transactions_failed(_total)?\"}[$__rate_interval])), 0.001)",
+          "legendFormat": "edr polls / tx",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate({__name__=~\"k6_negotiation_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_succeeded(_total)?\"}[$__rate_interval])) + sum(rate({__name__=~\"k6_dsp_transactions_failed(_total)?\"}[$__rate_interval])), 0.001)",
+          "legendFormat": "negotiation polls / tx",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "HTTP server \u2014 RED (rate / errors / duration), per route per runtime",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 100,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate (req/s) per runtime",
       "description": "Throughput per EDC container. sum of http_server_request_duration_seconds_count rate.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1}, "id": 1,
-      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[$__rate_interval]))", "legendFormat": "{{service_name}}"}]
-    },
-    {
-      "type": "timeseries", "title": "Error rate per runtime — real failures vs. benign polling 404",
-      "description": "Server 4xx/5xx split so a screenshot reads at a glance. RED = real failures (5xx + 4xx except 404) — this should sit at zero. BLUE dashed = 404 'not ready' responses, almost entirely the EDR-availability poll (GET /management/v3/edrs/{id}/dataaddress returns 404 on every poll until the transfer reaches STARTED); these are benign polling, NOT failed transactions. The two lines sum to the old 4xx+5xx total. The authoritative failed-transaction signal is the client-side dsp_transaction_failed_rate.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1}, "id": 2,
-      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": [
-        {"matcher": {"id": "byRegexp", "options": ".*real failures.*"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
-        {"matcher": {"id": "byRegexp", "options": ".*benign.*"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}, {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [6, 4]}}, {"id": "custom.fillOpacity", "value": 0}]}
-      ]},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "id": 1,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
       "targets": [
-        {"refId": "REAL", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\", http_response_status_code=~\"4..|5..\", http_response_status_code!=\"404\"}[$__rate_interval]))", "legendFormat": "{{service_name}} — real failures (5xx / non-404 4xx)"},
-        {"refId": "POLL", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\", http_response_status_code=\"404\"}[$__rate_interval]))", "legendFormat": "{{service_name}} — 404 not-ready (EDR polling, benign)"}
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}"
+        }
       ]
     },
-
     {
-      "type": "timeseries", "title": "p95 latency per endpoint (route)",
+      "type": "timeseries",
+      "title": "Error rate per runtime \u2014 real failures vs. benign polling 404",
+      "description": "404s on the EDR endpoint are benign in PROPORTION, not in MAGNITUDE: the endpoint 404s while a transfer is starting, so a few per transaction is normal. A 404 rate that dwarfs the success rate means transactions are polling to timeout \u2014 during the first Factory-X campaign this series sat at ~595/s (88% of all traffic) while 'real failures' was flat at zero and every panel looked healthy. Read it against 'EDR polls per transaction' above, never on its own.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "id": 2,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*real failures.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*benign.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "REAL",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\", http_response_status_code=~\"4..|5..\", http_response_status_code!=\"404\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} \u2014 real failures (5xx / non-404 4xx)"
+        },
+        {
+          "refId": "POLL",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\", http_response_status_code=\"404\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} \u2014 404 not-ready (EDR polling, benign)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 latency per endpoint (route)",
       "description": "95th percentile request duration, broken down by runtime + http_route.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9}, "id": 3,
-      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 0}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))", "legendFormat": "{{service_name}} {{http_route}}"}]
-    },
-    {
-      "type": "timeseries", "title": "Latency percentiles (aggregate per runtime)",
-      "description": "p50 / p95 / p99 across all routes, per container.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18}, "id": 4,
-      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 0}}, "overrides": []},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 3,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
       "targets": [
-        {"refId": "P50", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.50, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))", "legendFormat": "p50 {{service_name}}"},
-        {"refId": "P95", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))", "legendFormat": "p95 {{service_name}}"},
-        {"refId": "P99", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.99, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))", "legendFormat": "p99 {{service_name}}"}
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} {{http_route}}"
+        }
       ]
     },
     {
-      "type": "timeseries", "title": "Request rate per endpoint (route)",
-      "description": "Throughput broken down by route — shows which API is hottest during a run.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18}, "id": 5,
-      "fieldConfig": {"defaults": {"unit": "reqps", "custom": {"drawStyle": "line", "fillOpacity": 10, "stacking": {"mode": "normal"}}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[$__rate_interval]))", "legendFormat": "{{service_name}} {{http_route}}"}]
+      "type": "timeseries",
+      "title": "Latency percentiles (aggregate per runtime)",
+      "description": "p50 / p95 / p99 across all routes, per container.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "id": 4,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{service_name}}"
+        },
+        {
+          "refId": "P95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{service_name}}"
+        },
+        {
+          "refId": "P99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{service_name}}"
+        }
+      ]
     },
-
-    {"type": "row", "title": "JVM runtime (per EDC container)", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26}, "id": 101, "collapsed": false},
-
     {
-      "type": "timeseries", "title": "Heap used",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 27}, "id": 6,
-      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (jvm_memory_used_bytes{service_name=~\"$service\", jvm_memory_type=\"heap\"})", "legendFormat": "{{service_name}}"}]
+      "type": "timeseries",
+      "title": "Request rate per endpoint (route)",
+      "description": "Throughput broken down by route \u2014 shows which API is hottest during a run.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "id": 5,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} {{http_route}}"
+        }
+      ]
     },
     {
-      "type": "timeseries", "title": "GC pause rate",
-      "description": "rate of jvm_gc_duration_seconds_sum — time spent in GC per second. Correlate with latency spikes.",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 27}, "id": 7,
-      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (rate(jvm_gc_duration_seconds_sum{service_name=~\"$service\"}[$__rate_interval]))", "legendFormat": "{{service_name}}"}]
+      "type": "row",
+      "title": "JVM runtime (per EDC container)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 101,
+      "collapsed": false
     },
     {
-      "type": "timeseries", "title": "Live threads",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 27}, "id": 8,
-      "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 0}}, "overrides": []},
-      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (service_name) (jvm_thread_count{service_name=~\"$service\"})", "legendFormat": "{{service_name}}"}]
+      "type": "timeseries",
+      "title": "Heap used",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      },
+      "id": 6,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (jvm_memory_used_bytes{service_name=~\"$service\", jvm_memory_type=\"heap\"})",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC pause rate",
+      "description": "rate of jvm_gc_duration_seconds_sum \u2014 time spent in GC per second. Correlate with latency spikes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "id": 7,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (rate(jvm_gc_duration_seconds_sum{service_name=~\"$service\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Live threads",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 36
+      },
+      "id": 8,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service_name) (jvm_thread_count{service_name=~\"$service\"})",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["fx-mvd", "edc", "otel", "red"],
+  "tags": [
+    "fx-mvd",
+    "edc",
+    "otel",
+    "red"
+  ],
   "templating": {
     "list": [
       {
         "name": "service",
         "label": "EDC runtime",
         "type": "query",
-        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "definition": "label_values(http_server_request_duration_seconds_count, service_name)",
-        "query": {"query": "label_values(http_server_request_duration_seconds_count, service_name)", "refId": "StandardVariableQuery"},
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count, service_name)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "includeAll": true,
         "multi": true,
-        "current": {"text": ["All"], "value": ["$__all"]},
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
         "sort": 1
       }
     ]
   },
-  "time": {"from": "now-15m", "to": "now"},
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
   "title": "EDC API & Runtime (OTel)",

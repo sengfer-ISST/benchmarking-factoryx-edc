@@ -30,6 +30,7 @@ command -v curl >/dev/null || { echo "ERROR: curl not installed"; exit 1; }
 
 # --- knobs (env-overridable) ---
 POLL_INTERVAL_MS="${POLL_INTERVAL_MS:-250}"
+POLL_TIMEOUT_MS="${POLL_TIMEOUT_MS:-30000}"   # recorded: it sets the failure definition
 if [ "$SCENARIO_DIR" = "scenarios" ]; then
   IDENTITY_MODE="${IDENTITY_MODE:-on}"      # G1.RQ5 factor: on|off (the DEPLOYMENT differs, not the driver)
 else
@@ -90,14 +91,38 @@ fi
 
 # --- 4. measured run ---
 START_EPOCH="$(date -u +%s)"
+
+# --- 4a. k6 -> Prometheus remote write ---
+# ON BY DEFAULT. Without it, transaction success/failure and the time_to_* trends
+# exist ONLY in k6's end-of-run summary: no Grafana panel can show a workflow
+# failure while the run is happening, and a ramp cannot be analysed per stage at
+# all (the first campaign lost the saturation knee this way). Probe first so a
+# Prometheus without --web.enable-remote-write-receiver degrades to a warning
+# instead of failing the run.
 RW_ARGS=()
-if [ -n "${K6_PROMETHEUS_RW_SERVER_URL:-}" ]; then
-  RW_ARGS=(--out experimental-prometheus-rw)   # needs Prometheus --web.enable-remote-write-receiver
-  echo "k6 -> Prometheus remote-write: ${K6_PROMETHEUS_RW_SERVER_URL}"
+K6_PROMETHEUS_RW_SERVER_URL="${K6_PROMETHEUS_RW_SERVER_URL:-${PROM_URL}/api/v1/write}"
+RW_STATUS="disabled"
+if [ "${K6_REMOTE_WRITE:-1}" = "1" ]; then
+  # An empty POST to a live receiver is rejected as a bad protobuf (400), while a
+  # Prometheus without the flag 404s. Anything but 404/000 means it is listening.
+  rw_code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' -X POST "$K6_PROMETHEUS_RW_SERVER_URL" || echo 000)"
+  if [ "$rw_code" != "404" ] && [ "$rw_code" != "000" ]; then
+    export K6_PROMETHEUS_RW_SERVER_URL
+    export K6_PROMETHEUS_RW_TREND_STATS="${K6_PROMETHEUS_RW_TREND_STATS:-p(50),p(95),p(99),max,count}"
+    RW_ARGS=(--out experimental-prometheus-rw)
+    RW_STATUS="$K6_PROMETHEUS_RW_SERVER_URL"
+    echo "k6 -> Prometheus remote-write: $K6_PROMETHEUS_RW_SERVER_URL"
+  else
+    echo "WARNING: Prometheus at $K6_PROMETHEUS_RW_SERVER_URL has no remote-write receiver (HTTP $rw_code)."
+    echo "         Add '--web.enable-remote-write-receiver' to the prometheus command in the compose file."
+    echo "         Continuing WITHOUT k6 time series — only the end-of-run summary will exist."
+    RW_STATUS="unavailable_http_${rw_code}"
+  fi
 fi
 set +e
 k6 run \
   -e CONNECTOR="$CONNECTOR" -e SCENARIO="$SCENARIO" -e RESULT_DIR="$RESULT_DIR" -e POLL_INTERVAL_MS="$POLL_INTERVAL_MS" \
+  -e POLL_TIMEOUT_MS="$POLL_TIMEOUT_MS" \
   -e IDENTITY_MODE="$IDENTITY_MODE" -e CATALOG_SIZE="$CATALOG_SIZE" \
   --tag connector="$CONNECTOR" --tag scenario="$SCENARIO" --tag run_id="$TS" --tag identity_mode="$IDENTITY_MODE" \
   "${RW_ARGS[@]}" \
@@ -111,22 +136,77 @@ END_EPOCH="$(date -u +%s)"
 "$ROOT/orchestration/snapshot-prom.sh" "$START_EPOCH" "$END_EPOCH" "$RESULT_DIR" "$CONFIG_PATH" "$PROM_URL" "$PROM_RATE_WINDOW" \
   || echo "  (Prometheus snapshot failed — server CSVs may be empty)"
 
+# --- 5b. connector logs for the run window ---
+# Metrics say a transaction failed; only the connector log says WHY (rejected
+# policy vs. exhausted pool vs. state-machine backlog). The first campaign kept no
+# logs, so a 100%-failure run could not be diagnosed after the fact. Scoped to the
+# SUT services from config and to the run window, so this stays small.
+LOG_DIR="$RESULT_DIR/logs"
+mkdir -p "$LOG_DIR"
+if command -v docker >/dev/null 2>&1; then
+  while read -r svc; do
+    [ -n "$svc" ] || continue
+    # Container names may carry a compose project prefix; match on substring.
+    cid="$(docker ps -a --filter "name=$svc" --format '{{.Names}}' | head -1)"
+    [ -n "$cid" ] || continue
+    docker logs --since "$START_EPOCH" --until "$END_EPOCH" "$cid" >"$LOG_DIR/$svc.log" 2>&1 || true
+  done < <(jq -r '.services.sut[]?' "$CONFIG_PATH")
+  echo "  logs -> $LOG_DIR ($(ls -1 "$LOG_DIR" 2>/dev/null | wc -l) files)"
+  # Cheap post-run error census; a spike here localizes the failure immediately.
+  grep -ciE "error|exception|timeout" "$LOG_DIR"/*.log 2>/dev/null | sed 's|.*/|    |' || true
+fi
+
 # --- 6. meta.json (params + provenance) ---
+# HARNESS_HASH is the evidence behind the fairness claim: identical driver bytes
+# across all three repos. Recording it per run means a reviewer can verify that a
+# given result was produced by the audited driver, not by a drifted copy.
+HARNESS_HASH="$(cat "$ROOT"/lib/*.js "$ROOT/$SCENARIO_DIR"/*.js 2>/dev/null | md5sum | cut -d' ' -f1)"
+# Stack age: every run inherits the DB state of previous runs on the same stack.
+# Without this, order effects are invisible after the fact.
+PROVIDER_SVC="$(jq -r '.services.provider[0] // .services.sut[0] // empty' "$CONFIG_PATH")"
+STACK_STARTED="$(docker inspect -f '{{.State.StartedAt}}' "$PROVIDER_SVC" 2>/dev/null || echo unknown)"
+
 jq -n \
   --arg connector "$CONNECTOR" --arg scenario "$SCENARIO" --arg sdir "$SCENARIO_DIR" --arg ts "$TS" \
-  --arg poll "$POLL_INTERVAL_MS" --arg start "$START_EPOCH" --arg end "$END_EPOCH" \
+  --arg poll "$POLL_INTERVAL_MS" --arg polltimeout "$POLL_TIMEOUT_MS" \
+  --arg start "$START_EPOCH" --arg end "$END_EPOCH" \
   --arg idmode "$IDENTITY_MODE" --arg catsize "$CATALOG_SIZE" \
   --arg promwin "$PROM_RATE_WINDOW" --arg promurl "$PROM_URL" \
   --arg k6ver "$(k6 version 2>/dev/null | head -1)" --arg k6exit "$K6_EXIT" \
   --arg gitsha "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo n/a)" \
-  --arg rw "${K6_PROMETHEUS_RW_SERVER_URL:-none}" \
+  --arg dirty "$(git -C "$ROOT" status --porcelain 2>/dev/null | head -1 | grep -q . && echo true || echo false)" \
+  --arg rw "$RW_STATUS" \
+  --arg warmdur "$WARMUP_DURATION" --arg warmrate "$WARMUP_RATE" --arg skipwarm "$SKIP_WARMUP" \
+  --arg harness "$HARNESS_HASH" --arg stackstart "$STACK_STARTED" \
   '{connector:$connector, scenario:$scenario, scenario_dir:$sdir, run_id:$ts,
-    poll_interval_ms:($poll|tonumber), identity_mode:$idmode, catalog_size:($catsize|tonumber),
+    poll_interval_ms:($poll|tonumber), poll_timeout_ms:($polltimeout|tonumber),
+    identity_mode:$idmode, catalog_size:($catsize|tonumber),
     start_epoch:($start|tonumber), end_epoch:($end|tonumber),
+    warmup:{duration:$warmdur, rate:($warmrate|tonumber), skipped:($skipwarm=="1")},
     prometheus:{url:$promurl, rate_window:$promwin, remote_write:$rw},
-    k6:{version:$k6ver, exit_code:($k6exit|tonumber)}, git_sha:$gitsha,
-    env:{RATE:(env.RATE//null), DURATION:(env.DURATION//null), MAX_VUS:(env.MAX_VUS//null), PAYLOAD_SIZE:(env.PAYLOAD_SIZE//null)}}' \
+    k6:{version:$k6ver, exit_code:($k6exit|tonumber)},
+    git_sha:$gitsha, git_dirty:($dirty=="true"), harness_hash:$harness, stack_started_at:$stackstart,
+    env:{RATE:(env.RATE//null), DURATION:(env.DURATION//null), MAX_VUS:(env.MAX_VUS//null),
+         PREALLOCATED_VUS:(env.PREALLOCATED_VUS//null), VUS:(env.VUS//null),
+         STAGE_DURATION:(env.STAGE_DURATION//null), RATES:(env.RATES//null), VU_STAGES:(env.VU_STAGES//null),
+         PAYLOAD_SIZE:(env.PAYLOAD_SIZE//null), PAYLOAD_BYTES:(env.PAYLOAD_BYTES//null),
+         PAYLOAD_URL:(env.PAYLOAD_URL//null)}}' \
   > "$RESULT_DIR/meta.json"
+
+# --- 7. validity verdict (printed, and cheap to grep across a campaign) ---
+# Exit 0 does NOT mean the run is usable: the ramp scenarios carry abort-only
+# thresholds, so a run that failed 40% of its transactions still exits 0. These
+# three numbers decide whether the data describes the connector or the queue.
+if [ -f "$RESULT_DIR/k6-summary.json" ]; then
+  jq -r '
+    (.metrics.dsp_transactions_succeeded.values.count // 0) as $ok
+    | (.metrics.dsp_transactions_failed.values.count // 0) as $bad
+    | (.metrics.dropped_iterations.values.count // 0) as $drop
+    | "VALIDITY  ok=\($ok)  failed=\($bad)  failed_rate=\((($bad / (if ($ok+$bad)>0 then ($ok+$bad) else 1 end)) * 100 | floor))%  dropped_iterations=\($drop)"
+      + (if $drop > 0 then "  <-- OFFERED RATE NOT DELIVERED (raise MAX_VUS or lower RATE)" else "" end)
+      + (if ($ok+$bad) > 0 and ($bad / ($ok+$bad)) > 0.05 then "  <-- >5% FAILURES: past the knee, not a valid operating point" else "" end)
+  ' "$RESULT_DIR/k6-summary.json" | tee "$RESULT_DIR/validity.txt"
+fi
 
 echo ">>> done: $RESULT_DIR  (k6 exit $K6_EXIT)"
 exit "$K6_EXIT"

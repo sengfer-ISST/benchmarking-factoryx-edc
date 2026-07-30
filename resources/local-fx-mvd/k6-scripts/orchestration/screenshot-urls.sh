@@ -30,9 +30,9 @@ ROOT="$(cd "$HERE/.." && pwd)"          # this k6-scripts/
 RESULTS="$ROOT/results"
 
 CONNECTOR="${1:-}"; SCENARIO="${2:-}"
-GRAFANA_URL="${GRAFANA_URL:-http://edc-performance.isst.fraunhofer.de:3000}"
+GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
 DASH="${DASH:-edc-api-red}"
-THEME="${THEME:-dark}"
+THEME="${THEME:-light}"
 
 [ -d "$RESULTS" ] || { echo "no results/ under $ROOT — run something first" >&2; exit 1; }
 
