@@ -45,16 +45,20 @@ export function asArray(x) {
   return Array.isArray(x) ? x : [x];
 }
 
-// Catalog `dcat:dataset` is a single object when one asset is offered and an
-// array when several are. Pick by asset @id, falling back to the first dataset.
+// Catalog `dcat:dataset` is a single object when one asset is offered and an array
+// when several are. Pick by asset @id.
+//
+// NO SILENT FALLBACK when a specific asset was asked for. The old behaviour —
+// "not found, use datasets[0]" — meant the driver benchmarked whatever happened to
+// be first: the 2026-07-31 payload-sweep pulled the same 5,645-byte default asset at
+// every size because ~1000 leftover catalog-sweep assets pushed `payload-1KB` off
+// the first catalog page. Every run looked healthy and the sweep varied nothing.
+// Returning null here turns that into a visible failure instead.
 export function pickDataset(catalogBody, assetId) {
   const datasets = asArray(catalogBody['dcat:dataset'] || catalogBody['dataset']);
   if (datasets.length === 0) return null;
-  if (assetId) {
-    const match = datasets.find((d) => d && d['@id'] === assetId);
-    if (match) return match;
-  }
-  return datasets[0];
+  if (!assetId) return datasets[0];
+  return datasets.find((d) => d && d['@id'] === assetId) || null;
 }
 
 // Offer id lives at dataset.odrl:hasPolicy.@id (hasPolicy may be object or array).

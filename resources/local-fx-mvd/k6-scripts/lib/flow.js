@@ -20,11 +20,20 @@ export function requestCatalog(assetId) {
     counterPartyAddress: CONFIG.providerDspAddress,
     counterPartyId: CONFIG.providerId,
     protocol: CONFIG.protocol,
+    // EDC applies a DEFAULT PAGE LIMIT (50) when no querySpec is sent. The catalog
+    // sweep leaves up to 1000 assets on the provider, so without this the target
+    // asset silently falls off the first page — which is exactly how the 2026-07-31
+    // payload-sweep ended up measuring the wrong asset at all five sizes. The limit
+    // must exceed the largest catalog size the sweep seeds.
+    querySpec: { offset: 0, limit: Number((CONFIG.catalog && CONFIG.catalog.pageLimit) || 2000) },
   };
   const res = postJson(`${CONFIG.consumerManagementUrl}/v3/catalog/request`, body, 'catalog');
   m.catalog.add(res.timings.duration, tag('catalog'));
   if (!checkStatus(res, 'catalog')) return null;
   const ds = pickDataset(res.json(), aid);
+  // A miss here means the asset is genuinely absent from the catalog (not seeded, or
+  // still beyond the page limit) — fail rather than negotiate for something else.
+  if (!checkField({ ds }, 'ds', 'catalog')) return null;
   const offerId = offerIdFromDataset(ds);
   if (!checkField({ offerId }, 'offerId', 'catalog')) return null;
   return { offerId, assetId: (ds && ds['@id']) || aid };

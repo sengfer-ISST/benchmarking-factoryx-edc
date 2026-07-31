@@ -200,6 +200,27 @@ jq -n \
          PAYLOAD_URL:(env.PAYLOAD_URL//null)}}' \
   > "$RESULT_DIR/meta.json"
 
+# --- 6b. settle before the next run ---
+# A run that pushed the connector past its knee leaves in-flight transfers draining
+# for minutes. On 2026-07-31 a concurrency run started 67 s after a saturation ramp
+# ended, hit the leftover backlog, and aborted with 2/2 failures; the same run three
+# minutes later was clean (1130/1130). Carry-over is an ordering confound, so wait it
+# out rather than randomising over it. Only after runs that actually stressed the
+# system — a clean steady run needs no gap.
+SETTLE_SECONDS="${SETTLE_SECONDS:-60}"
+if [ "$SETTLE_SECONDS" -gt 0 ] && [ -f "$RESULT_DIR/k6-summary.json" ]; then
+  needs_settle="$(jq -r '
+    ((.metrics.dsp_transactions_failed.values.count // 0) as $bad
+     | (.metrics.dsp_transactions_succeeded.values.count // 0) as $ok
+     | if ($ok+$bad) > 0 and ($bad / ($ok+$bad)) > 0.05 then "yes" else "no" end)' \
+    "$RESULT_DIR/k6-summary.json" 2>/dev/null || echo no)"
+  case "$SCENARIO" in saturation-open|concurrency-closed) needs_settle=yes ;; esac
+  if [ "$needs_settle" = "yes" ]; then
+    echo "Settling ${SETTLE_SECONDS}s (this run stressed the connector; the next one must not inherit its backlog)"
+    sleep "$SETTLE_SECONDS"
+  fi
+fi
+
 # --- 7. validity verdict (printed, and cheap to grep across a campaign) ---
 # Exit 0 does NOT mean the run is usable: the ramp scenarios carry abort-only
 # thresholds, so a run that failed 40% of its transactions still exits 0. These
