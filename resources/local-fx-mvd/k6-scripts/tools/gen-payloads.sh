@@ -28,6 +28,20 @@ case "${1:-}" in
 esac
 OUT="${1:-${PAYLOAD_DIR:-./payloads}}"
 PORT="${PAYLOAD_PORT:-8888}"
+
+# A literal '~' in the path is almost always a shell mistake: tilde expansion happens
+# BEFORE parameter expansion, so `~$HOME/x` is not a home directory — it is a relative
+# path under a directory actually named '~'.
+case "$OUT" in
+  *"~"*) echo "WARNING: PAYLOAD_DIR contains a literal '~' ($OUT)." >&2
+         echo "         Tilde only expands at the start of a word: use \$HOME/... or ~/... ." >&2 ;;
+esac
+
+# Absolutise BEFORE deriving any path from it. The server runs with cwd=\$OUT, so a
+# relative PIDFILE would resolve against \$OUT twice (./payloads -> ./payloads/payloads/…)
+# and the write fails — which broke even the documented default.
+[ "$CMD" = "stop" ] || mkdir -p "$OUT"
+OUT="$(cd "$OUT" 2>/dev/null && pwd || echo "$OUT")"
 PIDFILE="$OUT/.server.pid"
 
 # PID of whatever actually holds the port (ss, then lsof, then fuser — one of the
@@ -55,8 +69,6 @@ stop_server() {
   [ -z "$(port_owner)" ] && echo ":$PORT is free" || echo "WARNING: :$PORT still in use" >&2
 }
 [ "$CMD" = "stop" ] && { stop_server; exit 0; }
-
-mkdir -p "$OUT"
 
 # name -> bytes. Regenerated only when absent or the wrong size, so `serve` is cheap
 # to re-run and a half-written 100 MB file from an interrupted run gets replaced.

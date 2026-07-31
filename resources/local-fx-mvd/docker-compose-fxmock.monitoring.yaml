@@ -394,6 +394,12 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_DISABLE_LOGIN_FORM=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Server-side PNG rendering for orchestration/export-panels.sh — turns the
+      # per-arm screenshot chore into one command. Without these the /render
+      # endpoint returns "Image renderer plugin not found".
+      - GF_RENDERING_SERVER_URL=http://grafana-renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_LOG_FILTERS=rendering:debug
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
@@ -402,6 +408,22 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+    networks:
+      - fx-test-network
+    restart: unless-stopped
+
+  # Headless Chromium that renders dashboard panels to PNG. Only ever called by
+  # Grafana itself, so it is not published on the host.
+  grafana-renderer:
+    container_name: grafana-renderer
+    image: grafana/grafana-image-renderer:3.11.6
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      - ENABLE_METRICS=false
+      - RENDERING_MODE=default
     networks:
       - fx-test-network
     restart: unless-stopped

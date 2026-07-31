@@ -181,13 +181,68 @@
       }
     },
     {
+      "id": 203,
+      "type": "timeseries",
+      "title": "Async phase latency p95 \u2014 time-to-AGREED / time-to-EDR / end-to-end",
+      "description": "The RQ4 figure: the two composite waits that no single HTTP request captures, plus the end-to-end transaction. Needs k6 remote-write. If time_to_edr dominates e2e, the transfer/EDR half is the bottleneck \u2014 that is exactly what the 2026-07-29 Factory-X campaign showed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max({__name__=~\"k6_time_to_agreed_p95\"})",
+          "legendFormat": "time-to-AGREED p95",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max({__name__=~\"k6_time_to_edr_p95\"})",
+          "legendFormat": "time-to-EDR p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max({__name__=~\"k6_e2e_transaction_duration_p95\"})",
+          "legendFormat": "end-to-end p95",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
       "type": "row",
       "title": "HTTP server \u2014 RED (rate / errors / duration), per route per runtime",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 17
       },
       "id": 100,
       "collapsed": false
@@ -204,7 +259,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 18
       },
       "id": 1,
       "fieldConfig": {
@@ -241,7 +296,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 18
       },
       "id": 2,
       "fieldConfig": {
@@ -332,7 +387,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "id": 3,
       "fieldConfig": {
@@ -369,7 +424,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "id": 4,
       "fieldConfig": {
@@ -424,7 +479,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 35
       },
       "id": 5,
       "fieldConfig": {
@@ -459,7 +514,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "id": 101,
       "collapsed": false
@@ -475,7 +530,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 44
       },
       "id": 6,
       "fieldConfig": {
@@ -512,7 +567,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 36
+        "y": 44
       },
       "id": 7,
       "fieldConfig": {
@@ -548,7 +603,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 36
+        "y": 44
       },
       "id": 8,
       "fieldConfig": {
