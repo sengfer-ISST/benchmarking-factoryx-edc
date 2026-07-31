@@ -1,0 +1,276 @@
+{
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "p(90)",
+      "p(95)",
+      "p(99)",
+      "max",
+      "count"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "testRunDurationMs": 92354.396802,
+    "isStdOutTTY": false,
+    "isStdErrTTY": false
+  },
+  "metrics": {
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 4,
+        "min": 0,
+        "max": 4
+      }
+    },
+    "http_reqs": {
+      "contains": "default",
+      "values": {
+        "count": 3343,
+        "rate": 36.197518642963026
+      },
+      "type": "counter"
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 4680,
+        "fails": 0
+      }
+    },
+    "dsp_transactions_succeeded": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 25.337180264592728,
+        "count": 2340
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "contains": "time",
+      "values": {
+        "p(90)": 194.4825246,
+        "p(95)": 207.7652987499999,
+        "p(99)": 246.7486980800001,
+        "max": 331.637784,
+        "count": 2340,
+        "avg": 147.92112444743574,
+        "min": 57.685193,
+        "med": 143.82518449999998
+      },
+      "type": "trend"
+    },
+    "catalog_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 331.637784,
+        "count": 2340,
+        "avg": 147.92112444743574,
+        "min": 57.685193,
+        "med": 143.82518449999998,
+        "p(90)": 194.4825246,
+        "p(95)": 207.7652987499999,
+        "p(99)": 246.7486980800001
+      }
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 2340,
+        "rate": 25.337180264592728
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 0.320908,
+        "count": 3343,
+        "avg": 0.00039525695483099007,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "count": 3343,
+        "avg": 0.04925355219862399,
+        "min": 0.010254,
+        "med": 0.042329,
+        "p(90)": 0.07063600000000006,
+        "p(95)": 0.09245429999999973,
+        "p(99)": 0.19731667999999997,
+        "max": 0.556928
+      }
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 1.3309657999999995,
+        "max": 9.310443,
+        "count": 3343,
+        "avg": 0.3357346622793892,
+        "min": 0.025335,
+        "med": 0.308452,
+        "p(90)": 0.6141614000000002,
+        "p(95)": 0.7968606999999998
+      }
+    },
+    "iteration_duration": {
+      "values": {
+        "count": 2340,
+        "avg": 153.91323308846145,
+        "min": 62.214612,
+        "med": 150.10166750000002,
+        "p(90)": 199.90378049999998,
+        "p(95)": 213.60772134999996,
+        "p(99)": 252.1877296900001,
+        "max": 336.280359
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "dsp_transaction_failed_rate": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 2340
+      },
+      "thresholds": {
+        "rate<0.05": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_tls_handshaking": {
+      "values": {
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 0,
+        "count": 3343,
+        "avg": 0,
+        "min": 0,
+        "med": 0
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 1003,
+        "fails": 2340,
+        "rate": 0.30002991325157047
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 1370155,
+        "rate": 14835.839412578225
+      }
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 260814651,
+        "rate": 2824063.174373436
+      }
+    },
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 0.614898,
+        "count": 3343,
+        "avg": 0.009856426862099914,
+        "min": 0.003022,
+        "med": 0.007937,
+        "p(90)": 0.011545600000000001,
+        "p(95)": 0.013662299999999995,
+        "p(99)": 0.03370576
+      }
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "count": 3343,
+        "avg": 103.78520318127465,
+        "min": 1.004914,
+        "med": 125.646881,
+        "p(90)": 185.63273640000003,
+        "p(95)": 199.26926129999993,
+        "p(99)": 235.9182519999999,
+        "max": 331.08962
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 236.2348355599999,
+        "max": 331.637784,
+        "count": 3343,
+        "avg": 104.17019139575223,
+        "min": 1.067599,
+        "med": 126.070486,
+        "p(90)": 186.3468362,
+        "p(95)": 199.80498349999993
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 4,
+        "min": 4,
+        "max": 4
+      }
+    }
+  },
+  "setup_data": {},
+  "root_group": {
+      "checks": [
+        {
+          "name": "catalog status ok",
+          "path": "::catalog status ok",
+          "id": "76a716c2a8409866d4f7a83f9b596bc2",
+          "passes": 2340,
+          "fails": 0
+        },
+        {
+          "name": "catalog has offerId",
+          "path": "::catalog has offerId",
+          "id": "750a376f7d98d0da1d09aa4b33c8db24",
+          "passes": 2340,
+          "fails": 0
+        }
+      ],
+      "name": "",
+      "path": "",
+      "id": "d41d8cd98f00b204e9800998ecf8427e",
+      "groups": []
+    }
+}

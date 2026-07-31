@@ -1,0 +1,43 @@
+{
+  "connector": "factoryx",
+  "scenario": "saturation-open",
+  "scenario_dir": "scenarios",
+  "run_id": "2026-07-31T11-55-21Z",
+  "poll_interval_ms": 250,
+  "poll_timeout_ms": 30000,
+  "identity_mode": "on",
+  "catalog_size": 1,
+  "start_epoch": 1785498987,
+  "end_epoch": 1785499631,
+  "warmup": {
+    "duration": "60s",
+    "rate": 2,
+    "skipped": false
+  },
+  "prometheus": {
+    "url": "http://localhost:9090",
+    "rate_window": "1m",
+    "remote_write": "http://localhost:9090/api/v1/write"
+  },
+  "k6": {
+    "version": "k6 v2.1.0+dirty (commit/83a87a41e2-dirty, go1.26.5, linux/amd64)",
+    "exit_code": 99
+  },
+  "git_sha": "f3024b7",
+  "git_dirty": true,
+  "harness_hash": "64962025e2e5495b8d4984a684312ce9",
+  "stack_started_at": "2026-07-31T11:00:58.912808028Z",
+  "env": {
+    "RATE": null,
+    "DURATION": null,
+    "MAX_VUS": null,
+    "PREALLOCATED_VUS": null,
+    "VUS": null,
+    "STAGE_DURATION": null,
+    "RATES": null,
+    "VU_STAGES": null,
+    "PAYLOAD_SIZE": null,
+    "PAYLOAD_BYTES": null,
+    "PAYLOAD_URL": null
+  }
+}
