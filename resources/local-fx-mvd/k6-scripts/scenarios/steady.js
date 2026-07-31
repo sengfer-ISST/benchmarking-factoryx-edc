@@ -25,7 +25,7 @@ export const options = Object.assign({}, baseOptions, {
       executor: 'constant-arrival-rate',
       rate: Number(__ENV.RATE || 2),            // full DSP transactions / sec
       timeUnit: '1s',
-      duration: __ENV.DURATION || '10m',
+      duration: __ENV.DURATION || '5m',
       // Each transaction holds a VU through both async polls (seconds), so the
       // pool must be >> rate. If k6 warns "insufficient VUs", raise MAX_VUS —
       // you're then measuring k6's pool, not the SUT.

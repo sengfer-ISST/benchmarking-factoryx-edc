@@ -22,7 +22,7 @@ export const options = Object.assign({}, baseOptions, {
     catalog: {
       executor: 'constant-vus',
       vus: Number(__ENV.VUS || 4),
-      duration: __ENV.DURATION || '2m',
+      duration: __ENV.DURATION || '90s',
       // catalog_size is the swept factor — tag every sample so the per-size
       // catalog_duration series are separable in the summary / Prometheus-RW.
       tags: { scenario: 'catalog-sweep', catalog_size: String(CATALOG_SIZE) },

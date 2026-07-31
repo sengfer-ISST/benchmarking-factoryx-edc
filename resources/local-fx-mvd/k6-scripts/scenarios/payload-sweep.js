@@ -54,7 +54,7 @@ export const options = Object.assign({}, baseOptions, {
     pull: {
       executor: 'constant-vus',
       vus: Number(__ENV.VUS || 4),
-      duration: __ENV.DURATION || '2m',
+      duration: __ENV.DURATION || '60s',
       tags: { scenario: 'payload-sweep', payload: SIZE },
     },
   },

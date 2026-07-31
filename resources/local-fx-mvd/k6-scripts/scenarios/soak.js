@@ -20,7 +20,7 @@ export const options = Object.assign({}, baseOptions, {
       executor: 'constant-arrival-rate',
       rate: Number(__ENV.RATE || 1),
       timeUnit: '1s',
-      duration: __ENV.DURATION || '1h',
+      duration: __ENV.DURATION || '30m',
       preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 50),
       maxVUs: Number(__ENV.MAX_VUS || 200),
       tags: { scenario: 'soak' },

@@ -19,7 +19,7 @@ import { seedProvider } from '../lib/seed.js';
 import { runTransaction } from '../lib/flow.js';
 import { buildSummary } from '../lib/metrics.js';
 
-const STAGE = __ENV.STAGE_DURATION || '2m';
+const STAGE = __ENV.STAGE_DURATION || '90s';
 const VU_STAGES = String(__ENV.VU_STAGES || '5,10,20,50')
   .split(',').map((s) => Number(s.trim())).filter((n) => n > 0);
 

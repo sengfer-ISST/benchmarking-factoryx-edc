@@ -24,7 +24,7 @@ import { seedProvider } from '../lib/seed.js';
 import { runTransaction } from '../lib/flow.js';
 import { buildSummary } from '../lib/metrics.js';
 
-const STAGE = __ENV.STAGE_DURATION || '2m';
+const STAGE = __ENV.STAGE_DURATION || '90s';
 const RATES = String(__ENV.RATES || '1,2,3,5,8,12')
   .split(',').map((s) => Number(s.trim())).filter((n) => n > 0);
 
