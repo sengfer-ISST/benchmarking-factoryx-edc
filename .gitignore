@@ -122,3 +122,8 @@ semicolon_delimited_script
 dash.jar
 dependency-list
 DEPENDENCIES
+
+# payload-sweep data source (tools/gen-payloads.sh): ~111 MB of random .bin
+# per repo, regenerable in seconds. Keep it out of git — and prefer a single shared
+# PAYLOAD_DIR outside the repos entirely.
+payloads/
