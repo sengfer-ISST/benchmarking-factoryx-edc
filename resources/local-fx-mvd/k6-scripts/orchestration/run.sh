@@ -64,7 +64,14 @@ else
   mapfile -t HEALTH_URLS < <(jq -r '[.off.providerDspBase, (if .off.sinkPollBase then .off.sinkPollBase + "/health" else null end)] | map(select(.))[]' "$CONFIG_PATH")
 fi
 [ "${#HEALTH_URLS[@]}" -gt 0 ] || { echo "ERROR: no health URLs in $CONFIG_PATH for SCENARIO_DIR=$SCENARIO_DIR"; exit 3; }
-responding() { [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$1" || echo 000)" != "000" ]; }
+# NB: on a connection failure curl ALREADY prints 000 via -w, so a `|| echo 000`
+# fallback appends a second one and yields "000\n000" — which is != "000" and made a
+# dead connector look healthy. Swallow curl's exit status instead of adding output.
+responding() {
+  local code
+  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$1" 2>/dev/null || true)"
+  [ -n "$code" ] && [ "$code" != "000" ]
+}
 all_up() {
   local u; for u in "${HEALTH_URLS[@]}"; do responding "$u" || return 1; done
   curl -sf -m 3 "$PROM_URL/-/ready" >/dev/null 2>&1

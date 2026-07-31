@@ -23,6 +23,8 @@ cd "$ROOT"
 CONNECTOR="${1:?usage: calibrate-rate.sh <connector> [rates] [duration]}"
 RATES="${2:-1 2 3 4 5 6 8}"
 DURATION="${3:-3m}"
+CONFIG_PATH="$ROOT/config/${CONNECTOR}.json"
+[ -f "$CONFIG_PATH" ] || { echo "ERROR: no config $CONFIG_PATH" >&2; exit 1; }
 
 # Pass criteria for a rung (all must hold):
 MAX_FAILED_RATE="${MAX_FAILED_RATE:-0.01}"   # <1% transactions failed
@@ -35,19 +37,72 @@ echo "Calibrating $CONNECTOR over rates [$RATES] x $DURATION each -> $OUT"
 echo "pass = failed_rate<$MAX_FAILED_RATE AND e2e_p95<${MAX_E2E_P95_MS}ms AND dropped<=$MAX_DROPPED"
 echo
 
+# --- preflight -------------------------------------------------------------
+# run.sh exits BEFORE k6 on a missing tool (1), a parity failure (2) or a health-gate
+# timeout (3). Without this check every rung burns its 90 s gate and the table fills
+# with "NO SUMMARY", which reads like a connector result but means the runs never
+# happened. Check once, up front, and say exactly what is wrong.
+PROM_URL="${PROM_URL:-$(jq -r '.prometheus.baseUrl // "http://localhost:9090"' "$CONFIG_PATH")}"
+CONSUMER_URL="$(jq -r '.consumerManagementUrl // empty' "$CONFIG_PATH")"
+preflight_fail=0
+CONSUMER_CODE="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$CONSUMER_URL" 2>/dev/null || true)"
+if [ -z "$CONSUMER_CODE" ] || [ "$CONSUMER_CODE" = "000" ]; then
+  echo "PREFLIGHT FAIL: consumer Management API not answering at $CONSUMER_URL" >&2
+  echo "                Is the stack up?  docker compose -f <compose-file> ps" >&2
+  preflight_fail=1
+fi
+if ! curl -sf -m 3 "$PROM_URL/-/ready" >/dev/null 2>&1; then
+  echo "PREFLIGHT FAIL: Prometheus not ready at $PROM_URL" >&2
+  echo "                (dst uses :9099 — check .prometheus.baseUrl in $CONFIG_PATH)" >&2
+  preflight_fail=1
+fi
+if [ -n "${CANONICAL_DIR:-}" ] && ! "$ROOT/tools/verify-parity.sh" "$CANONICAL_DIR" >/dev/null 2>&1; then
+  echo "PREFLIGHT FAIL: harness parity check failed against CANONICAL_DIR=$CANONICAL_DIR" >&2
+  echo "                Run: ./tools/verify-parity.sh \"\$CANONICAL_DIR\"" >&2
+  preflight_fail=1
+fi
+[ "$preflight_fail" -eq 0 ] || { echo; echo "Nothing was run. Fix the above and re-invoke." >&2; exit 3; }
+echo "preflight OK (consumer API + Prometheus reachable)"
+echo
+
 printf '%-6s %-10s %-12s %-12s %-9s %-8s %s\n' rate ok/attempts failed_rate e2e_p95_ms edr_polls dropped verdict | tee "$OUT/summary.txt"
 
 BEST=""
+RUNS_WITH_DATA=0
 for r in $RATES; do
   # SKIP_WARMUP=0: each rung gets the same warmup treatment as a measured run, so
   # the JIT state matches what steady will see.
-  RATE="$r" DURATION="$DURATION" SCENARIO_TAG="calibrate" \
-    "$HERE/run.sh" "$CONNECTOR" steady >"$OUT/rate-$r.log" 2>&1 || true
+  set +e
+  RATE="$r" DURATION="$DURATION" \
+    "$HERE/run.sh" "$CONNECTOR" steady >"$OUT/rate-$r.log" 2>&1
+  RC=$?
+  set -e
 
-  # Newest steady run folder is this rung's.
-  RUN_DIR="$(ls -1dt "$ROOT/results/$CONNECTOR/steady/"*/ 2>/dev/null | head -1)"
-  S="$RUN_DIR/k6-summary.json"
-  [ -f "$S" ] || { printf '%-6s %s\n' "$r" "NO SUMMARY (see $OUT/rate-$r.log)" | tee -a "$OUT/summary.txt"; continue; }
+  # Prefer the path run.sh itself printed over newest-mtime guessing.
+  RUN_DIR="$(grep -oP '^>>> .* ->  \K\S+' "$OUT/rate-$r.log" 2>/dev/null | head -1)"
+  [ -n "$RUN_DIR" ] || RUN_DIR="$(ls -1dt "$ROOT/results/$CONNECTOR/steady/"*/ 2>/dev/null | head -1)"
+  S="${RUN_DIR%/}/k6-summary.json"
+
+  if [ ! -f "$S" ]; then
+    # exit 99 = thresholds crossed and a summary DOES exist; anything else here is
+    # infrastructure, and continuing would produce five more identical failures.
+    case "$RC" in
+      1) why="run.sh config error (missing config/scenario/k6/jq/curl)" ;;
+      2) why="harness parity check failed" ;;
+      3) why="health gate timed out — stack or Prometheus not up" ;;
+      107) why="k6 script exception" ;;
+      *) why="run.sh exited $RC before producing a summary" ;;
+    esac
+    printf '%-6s %s\n' "$r" "NOT RUN — $why" | tee -a "$OUT/summary.txt"
+    echo >&2
+    echo "ABORTING: $why" >&2
+    echo "Last lines of $OUT/rate-$r.log:" >&2
+    tail -15 "$OUT/rate-$r.log" >&2
+    echo >&2
+    echo "This is an INFRASTRUCTURE failure, not a connector result — no rate was tested." >&2
+    exit "$RC"
+  fi
+  RUNS_WITH_DATA=$((RUNS_WITH_DATA + 1))
 
   read -r ok att fr p95 polls dropped <<EOF
 $(jq -r '
@@ -76,8 +131,14 @@ echo
 if [ -n "$BEST" ]; then
   echo "Highest sustainable rate for $CONNECTOR: ${BEST}/s" | tee -a "$OUT/summary.txt"
   echo "Campaign RATE must be <= the MINIMUM of this value across ALL connectors." | tee -a "$OUT/summary.txt"
+elif [ "$RUNS_WITH_DATA" -eq 0 ]; then
+  # Never claim a capacity result from runs that produced no data.
+  echo "INCONCLUSIVE: no rung produced a summary, so no rate was actually tested." | tee -a "$OUT/summary.txt"
+  echo "This says nothing about the connector — see the logs in $OUT." | tee -a "$OUT/summary.txt"
 else
-  echo "No rung passed — the connector cannot sustain even ${RATES%% *}/s under these criteria." | tee -a "$OUT/summary.txt"
-  echo "Investigate before benchmarking: check dsp_failures_terminated vs dsp_failures_timeout." | tee -a "$OUT/summary.txt"
+  echo "No rung passed — $CONNECTOR did not sustain even ${RATES%% *}/s under these criteria" | tee -a "$OUT/summary.txt"
+  echo "(based on $RUNS_WITH_DATA rung(s) that produced data)." | tee -a "$OUT/summary.txt"
+  echo "Next: check dsp_failures_terminated vs dsp_failures_timeout in the summaries —" | tee -a "$OUT/summary.txt"
+  echo "terminated = the connector rejected the transaction; timeout = it never got to it." | tee -a "$OUT/summary.txt"
 fi
 echo "Details: $OUT"
