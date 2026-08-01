@@ -45,7 +45,10 @@ CANONICAL_DIR="${CANONICAL_DIR:-}"          # set to the canonical k6-scripts to
 SKIP_WARMUP="${SKIP_WARMUP:-0}"
 
 TS="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
-RESULT_DIR="$ROOT/results/${CONNECTOR}/${SCENARIO}/${TS}"
+# Arm is part of the PATH, not only meta.json. ON and OFF of the same scenario used to
+# land in one folder distinguishable only by reading each meta.json — error-prone for a
+# study whose headline cross-analysis (X1) is exactly the ON-vs-OFF pairing.
+RESULT_DIR="$ROOT/results/${CONNECTOR}/${IDENTITY_MODE}/${SCENARIO}/${TS}"
 mkdir -p "$RESULT_DIR"
 echo ">>> $CONNECTOR / $SCENARIO  ->  $RESULT_DIR"
 

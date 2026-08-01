@@ -23,6 +23,7 @@ cd "$ROOT"
 CONNECTOR="${1:?usage: calibrate-rate.sh <connector> [rates] [duration]}"
 RATES="${2:-1 2 3 4 5 6 8}"
 DURATION="${3:-3m}"
+IDENTITY_MODE="${IDENTITY_MODE:-on}"   # results path is arm-scoped (see run.sh)
 CONFIG_PATH="$ROOT/config/${CONNECTOR}.json"
 [ -f "$CONFIG_PATH" ] || { echo "ERROR: no config $CONFIG_PATH" >&2; exit 1; }
 
@@ -80,7 +81,7 @@ for r in $RATES; do
 
   # Prefer the path run.sh itself printed over newest-mtime guessing.
   RUN_DIR="$(grep -oP '^>>> .* ->  \K\S+' "$OUT/rate-$r.log" 2>/dev/null | head -1)"
-  [ -n "$RUN_DIR" ] || RUN_DIR="$(ls -1dt "$ROOT/results/$CONNECTOR/steady/"*/ 2>/dev/null | head -1)"
+  [ -n "$RUN_DIR" ] || RUN_DIR="$(ls -1dt "$ROOT/results/$CONNECTOR/$IDENTITY_MODE/steady/"*/ 2>/dev/null | head -1)"
   S="${RUN_DIR%/}/k6-summary.json"
 
   if [ ! -f "$S" ]; then
