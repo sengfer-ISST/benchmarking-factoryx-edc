@@ -115,15 +115,27 @@ $(jq -r '
       (.metrics.dropped_iterations.values.count // 0) ] | @tsv' "$S")
 EOF
 
-  verdict=FAIL
-  awk -v fr="$fr" -v p95="$p95" -v d="$dropped" \
-      -v mfr="$MAX_FAILED_RATE" -v mp="$MAX_E2E_P95_MS" -v md="$MAX_DROPPED" \
-      'BEGIN { exit !(fr < mfr && p95 < mp && p95 > 0 && d <= md) }' && verdict=PASS
+  # Name the criterion that failed. "the connector cannot do 2/s" and "k6 could not
+  # offer 2/s" are different findings and only one of them is about the connector.
+  verdict=PASS
+  awk -v fr="$fr" -v mfr="$MAX_FAILED_RATE" 'BEGIN { exit !(fr < mfr) }' || verdict="FAIL(failures)"
+  if [ "$verdict" = "PASS" ]; then
+    awk -v p95="$p95" -v mp="$MAX_E2E_P95_MS" 'BEGIN { exit !(p95 < mp && p95 > 0) }' || verdict="FAIL(latency)"
+  fi
+  if [ "$verdict" = "PASS" ] && [ "${dropped:-0}" -gt "$MAX_DROPPED" ]; then
+    # NOT a connector limit: raise PREALLOCATED_VUS and re-run this rung before
+    # concluding anything about capacity.
+    verdict="FAIL(harness:dropped)"
+  fi
   [ "$verdict" = "PASS" ] && BEST="$r"
 
   pt=$(awk -v p="$polls" -v a="$att" 'BEGIN { printf "%.1f", (a>0 ? p/a : 0) }')
   printf '%-6s %-10s %-12.4f %-12.0f %-9s %-8s %s\n' \
     "$r" "$ok/$att" "$fr" "$p95" "$pt" "$dropped" "$verdict" | tee -a "$OUT/summary.txt"
+  case "$verdict" in
+    *harness*) echo "        ^ k6 could not OFFER this rate — not a connector limit." \
+                    "Re-run with PREALLOCATED_VUS=200 before believing it." | tee -a "$OUT/summary.txt" ;;
+  esac
   cp "$S" "$OUT/rate-$r-summary.json" 2>/dev/null || true
 done
 

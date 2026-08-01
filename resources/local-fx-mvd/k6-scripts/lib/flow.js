@@ -239,6 +239,7 @@ export function runTransaction(assetId) {
     m.failureReason.add(1, ft);
     if (detail.indexOf('terminated') === 0) m.failedTerminated.add(1, ft);
     else if (detail.indexOf('timeout') === 0) m.failedTimeout.add(1, ft);
+    else m.failedPhaseError.add(1, ft);   // synchronous phase: the HTTP call failed
   }
   return okAll;
 }

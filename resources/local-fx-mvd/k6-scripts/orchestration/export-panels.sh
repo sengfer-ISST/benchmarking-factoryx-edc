@@ -33,24 +33,47 @@ WIDTH="${WIDTH:-1200}"; HEIGHT="${HEIGHT:-450}"
 ALL_RUNS="${ALL_RUNS:-0}"         # 0 = newest run per combination (one figure each)
 PAD="${PAD:-15}"                  # seconds of context either side of the window
 
-# --- the curated panel set -------------------------------------------------
-# NOT every panel: only the ones a thesis figure is actually built from. Format is
-# dashboardUid:panelId:slug. Override with PANELS="..." to export something else.
-#   edc-api-red  200 tx outcome   201 failures by reason   202 polls/tx
-#                203 async phase latency (RQ4)             4 API latency percentiles
-#                1  request rate  6 heap  7 gc  8 threads
-#   rYdddlPWk    77 CPU basic     78 memory basic          (host ceiling, RQ3)
-PANELS="${PANELS:-\
-edc-api-red:200:tx-outcome \
-edc-api-red:203:async-latency \
-edc-api-red:202:polls-per-tx \
-edc-api-red:4:api-latency \
-edc-api-red:1:request-rate \
-edc-api-red:6:jvm-heap \
-edc-api-red:7:jvm-gc \
-edc-api-red:8:jvm-threads \
-rYdddlPWk:77:host-cpu \
-rYdddlPWk:78:host-mem}"
+# --- what to export --------------------------------------------------------
+# PROFILE=thesis (default): each scenario exports ONLY the panels its research
+#   question needs — the §5 Scenario-to-RQ map in COMMANDS-CHEATSHEET.md. Exporting
+#   all ten panels for every run produces mostly figures nobody puts in a thesis.
+# PROFILE=all: every panel for every run (the old behaviour, for exploration).
+# PANELS="uid:id:slug …": explicit override, wins over both.
+#
+# Panel reference — edc-api-red: 200 tx outcome, 201 failures by reason,
+#   202 polls/tx, 203 async phase latency, 4 API latency percentiles,
+#   1 request rate, 6 heap, 7 GC, 8 threads.  rYdddlPWk: 77 CPU, 78 memory.
+PROFILE="${PROFILE:-thesis}"
+
+ALL_PANELS="edc-api-red:200:tx-outcome edc-api-red:203:async-latency \
+edc-api-red:202:polls-per-tx edc-api-red:4:api-latency edc-api-red:1:request-rate \
+edc-api-red:6:jvm-heap edc-api-red:7:jvm-gc edc-api-red:8:jvm-threads \
+rYdddlPWk:77:host-cpu rYdddlPWk:78:host-mem"
+
+# Per-scenario sets. `smoke` is deliberately empty: it is a pass/fail gate, not a
+# figure. Every panel listed here earns its place in a chapter.
+panels_for() {
+  case "$1" in
+    smoke)              echo "" ;;                                    # gate only
+    # RQ1 head-to-head + RQ4 async cycle + one resource profile at the operating point
+    steady)             echo "edc-api-red:200:tx-outcome edc-api-red:203:async-latency \
+edc-api-red:4:api-latency edc-api-red:6:jvm-heap" ;;
+    # RQ2 open model: the knee. host-cpu proves the knee is the connector, not the box.
+    saturation-open)    echo "edc-api-red:200:tx-outcome edc-api-red:4:api-latency \
+edc-api-red:1:request-rate edc-api-red:202:polls-per-tx rYdddlPWk:77:host-cpu" ;;
+    # RQ2 closed model, reported beside the open one
+    concurrency-closed) echo "edc-api-red:200:tx-outcome edc-api-red:4:api-latency \
+edc-api-red:1:request-rate" ;;
+    # RQ5: catalog latency against catalog size — one panel, one figure per size
+    catalog-sweep)      echo "edc-api-red:4:api-latency" ;;
+    # RQ1 data plane: throughput against payload size
+    payload-sweep)      echo "edc-api-red:1:request-rate edc-api-red:4:api-latency" ;;
+    # RQ3 endurance: drift over the window is the whole point
+    soak)               echo "edc-api-red:6:jvm-heap edc-api-red:7:jvm-gc \
+edc-api-red:8:jvm-threads rYdddlPWk:78:host-mem" ;;
+    *)                  echo "$ALL_PANELS" ;;
+  esac
+}
 
 command -v jq   >/dev/null || { echo "ERROR: jq not installed" >&2; exit 1; }
 command -v curl >/dev/null || { echo "ERROR: curl not installed" >&2; exit 1; }
@@ -75,14 +98,14 @@ if [ "$probe" != "200" ] || ! head -c4 /tmp/.gf_probe.$$ 2>/dev/null | grep -q '
   rm -f /tmp/.gf_probe.$$; exit 2
 fi
 rm -f /tmp/.gf_probe.$$
-echo "renderer OK -> $OUTDIR (theme=$THEME ${WIDTH}x${HEIGHT})"
+echo "renderer OK -> $OUTDIR (profile=$PROFILE theme=$THEME ${WIDTH}x${HEIGHT})"
 
 # --- pick the runs ---------------------------------------------------------
 # Newest run per (connector, arm, scenario) unless ALL_RUNS=1: for a thesis figure you
 # want one representative image, not one per repetition.
 mapfile -t METAS < <(find "$ROOT/results" -name meta.json | sort)
 declare -A SEEN
-count=0; failed=0
+count=0; failed=0; skipped=0
 
 for m in "${METAS[@]}"; do
   c="$(jq -r '.connector' "$m")"; sc="$(jq -r '.scenario' "$m")"
@@ -108,9 +131,18 @@ for m in "${METAS[@]}"; do
     key="${key}_${run}"
   fi
 
+  # Resolve the panel set for THIS scenario.
+  if [ -n "${PANELS:-}" ];      then set_for_run="$PANELS"
+  elif [ "$PROFILE" = "all" ];  then set_for_run="$ALL_PANELS"
+  else                               set_for_run="$(panels_for "$sc")"
+  fi
+  if [ -z "$set_for_run" ]; then
+    skipped=$((skipped+1)); continue          # e.g. smoke: a gate, not a figure
+  fi
+
   fromms=$(( (from - PAD) * 1000 )); toms=$(( (to + PAD) * 1000 ))
 
-  for spec in $PANELS; do
+  for spec in $set_for_run; do
     uid="${spec%%:*}"; rest="${spec#*:}"; pid="${rest%%:*}"; slug="${rest##*:}"
     out="$OUTDIR/${key}_${slug}.png"
     code="$(curl -s -u "$GF_USER:$GF_PASS" -o "$out" -w '%{http_code}' \
@@ -126,7 +158,7 @@ for m in "${METAS[@]}"; do
 done
 
 echo
-echo "exported $count panel(s) to $OUTDIR${failed:+, $failed failed}"
+echo "exported $count panel(s) to $OUTDIR${failed:+, $failed failed}${skipped:+, $skipped run(s) skipped as gates}"
 [ "$count" -eq 0 ] && { echo "Nothing exported — is Prometheus still holding these windows (7d retention)?" >&2; exit 1; }
 cat <<EOF
 
@@ -134,5 +166,6 @@ Use in LaTeX:
   \\includegraphics[width=\\textwidth]{figures/factoryx_on_steady_async-latency}
 Export one connector/scenario only:  $0 factoryx steady
 Every repetition instead of newest:  ALL_RUNS=1 $0
-A different panel set:               PANELS="edc-api-red:200:tx-outcome" $0
+Every panel for every run:           PROFILE=all $0
+A specific panel set:                PANELS="edc-api-red:200:tx-outcome" $0
 EOF

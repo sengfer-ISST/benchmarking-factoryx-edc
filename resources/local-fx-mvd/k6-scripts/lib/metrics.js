@@ -29,6 +29,11 @@ export const m = {
   // fine-grained state name remains on dsp_failure_reason for Grafana.
   failedTerminated: new Counter('dsp_failures_terminated'),
   failedTimeout: new Counter('dsp_failures_timeout'),
+  // Failures in a SYNCHRONOUS phase (catalog / negotiation-init / transfer-init /
+  // datapull): the HTTP call itself did not return a usable response. Without this the
+  // three classes did not sum to the failure total and the remainder had to be dug out
+  // of the container logs — on 2026-08-01 DST that was 314 of 1248 failures.
+  failedPhaseError: new Counter('dsp_failures_phase_error'),
 
   negotiationPolls: new Counter('negotiation_polls'),
   edrPolls: new Counter('edr_polls'),
@@ -61,6 +66,18 @@ function statLine(label, name, data, isTime) {
 }
 
 function num(x) { return (x === undefined || x === null) ? '-' : Number(x).toFixed(1); }
+
+// The three failure classes must add up to dsp_transactions_failed. If they do not,
+// a failure path is unaccounted for and the run needs the container logs to explain it.
+function failureAccountingLine(data) {
+  const g = (n) => (data.metrics[n] && data.metrics[n].values && data.metrics[n].values.count) || 0;
+  const total = g('dsp_transactions_failed');
+  if (!total) return '  failure accounting       (no failures)';
+  const parts = g('dsp_failures_terminated') + g('dsp_failures_timeout') + g('dsp_failures_phase_error');
+  const gap = total - parts;
+  return `  failure accounting       ${parts}/${total} classified` +
+    (gap ? `  <-- ${gap} UNACCOUNTED: check logs/` : '  (complete)');
+}
 
 // Polls per attempted transaction. At a 250 ms interval a healthy EDR wait costs
 // a handful; a value near timeout/interval means transactions are sitting out the
@@ -98,6 +115,8 @@ function renderText(data) {
   L.push(statLine('failed rate', 'dsp_transaction_failed_rate', data, false));
   L.push(statLine('  of which TERMINATED', 'dsp_failures_terminated', data, false));
   L.push(statLine('  of which TIMED OUT', 'dsp_failures_timeout', data, false));
+  L.push(statLine('  of which HTTP-FAILED', 'dsp_failures_phase_error', data, false));
+  L.push(failureAccountingLine(data));
   L.push('-- observer effect (poll load) --');
   L.push(statLine('negotiation polls', 'negotiation_polls', data, false));
   L.push(statLine('edr polls', 'edr_polls', data, false));
