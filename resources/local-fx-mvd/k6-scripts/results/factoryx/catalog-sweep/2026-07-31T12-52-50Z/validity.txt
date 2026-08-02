@@ -1,1 +1,0 @@
-VALIDITY  ok=2334  failed=0  failed_rate=0%  dropped_iterations=0

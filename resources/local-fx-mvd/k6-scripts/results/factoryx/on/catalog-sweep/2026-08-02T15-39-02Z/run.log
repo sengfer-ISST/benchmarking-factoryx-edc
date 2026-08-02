@@ -1,0 +1,314 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/scenarios/catalog-sweep.js
+        output: Prometheus remote write (http://localhost:9090/api/v1/write)
+
+     scenarios: (100.00%) 1 scenario, 4 max VUs, 2m0s max duration (incl. graceful stop):
+              * catalog: 4 looping VUs for 1m30s (gracefulStop: 30s)
+
+
+running (0m01.0s), 4/4 VUs, 31 complete and 0 interrupted iterations
+catalog   [   1% ] 4 VUs  0m00.9s/1m30s
+
+running (0m02.0s), 4/4 VUs, 70 complete and 0 interrupted iterations
+catalog   [   2% ] 4 VUs  0m01.9s/1m30s
+
+running (0m03.0s), 4/4 VUs, 102 complete and 0 interrupted iterations
+catalog   [   3% ] 4 VUs  0m02.9s/1m30s
+
+running (0m04.0s), 4/4 VUs, 138 complete and 0 interrupted iterations
+catalog   [   4% ] 4 VUs  0m03.9s/1m30s
+
+running (0m05.0s), 4/4 VUs, 179 complete and 0 interrupted iterations
+catalog   [   5% ] 4 VUs  0m04.9s/1m30s
+
+running (0m06.0s), 4/4 VUs, 210 complete and 0 interrupted iterations
+catalog   [   7% ] 4 VUs  0m05.9s/1m30s
+
+running (0m07.0s), 4/4 VUs, 252 complete and 0 interrupted iterations
+catalog   [   8% ] 4 VUs  0m06.9s/1m30s
+
+running (0m08.0s), 4/4 VUs, 287 complete and 0 interrupted iterations
+catalog   [   9% ] 4 VUs  0m07.9s/1m30s
+
+running (0m09.0s), 4/4 VUs, 323 complete and 0 interrupted iterations
+catalog   [  10% ] 4 VUs  0m08.9s/1m30s
+
+running (0m10.0s), 4/4 VUs, 359 complete and 0 interrupted iterations
+catalog   [  11% ] 4 VUs  0m09.9s/1m30s
+
+running (0m11.0s), 4/4 VUs, 394 complete and 0 interrupted iterations
+catalog   [  12% ] 4 VUs  0m10.9s/1m30s
+
+running (0m12.0s), 4/4 VUs, 436 complete and 0 interrupted iterations
+catalog   [  13% ] 4 VUs  0m11.9s/1m30s
+
+running (0m13.0s), 4/4 VUs, 476 complete and 0 interrupted iterations
+catalog   [  14% ] 4 VUs  0m12.9s/1m30s
+
+running (0m14.0s), 4/4 VUs, 513 complete and 0 interrupted iterations
+catalog   [  15% ] 4 VUs  0m13.9s/1m30s
+
+running (0m15.0s), 4/4 VUs, 549 complete and 0 interrupted iterations
+catalog   [  17% ] 4 VUs  0m14.9s/1m30s
+
+running (0m16.0s), 4/4 VUs, 583 complete and 0 interrupted iterations
+catalog   [  18% ] 4 VUs  0m15.9s/1m30s
+
+running (0m17.0s), 4/4 VUs, 618 complete and 0 interrupted iterations
+catalog   [  19% ] 4 VUs  0m16.9s/1m30s
+
+running (0m18.0s), 4/4 VUs, 655 complete and 0 interrupted iterations
+catalog   [  20% ] 4 VUs  0m17.9s/1m30s
+
+running (0m19.0s), 4/4 VUs, 687 complete and 0 interrupted iterations
+catalog   [  21% ] 4 VUs  0m18.9s/1m30s
+
+running (0m20.0s), 4/4 VUs, 726 complete and 0 interrupted iterations
+catalog   [  22% ] 4 VUs  0m19.9s/1m30s
+
+running (0m21.0s), 4/4 VUs, 761 complete and 0 interrupted iterations
+catalog   [  23% ] 4 VUs  0m20.9s/1m30s
+
+running (0m22.0s), 4/4 VUs, 801 complete and 0 interrupted iterations
+catalog   [  24% ] 4 VUs  0m21.9s/1m30s
+
+running (0m23.0s), 4/4 VUs, 835 complete and 0 interrupted iterations
+catalog   [  25% ] 4 VUs  0m22.9s/1m30s
+
+running (0m24.0s), 4/4 VUs, 867 complete and 0 interrupted iterations
+catalog   [  27% ] 4 VUs  0m23.9s/1m30s
+
+running (0m25.0s), 4/4 VUs, 907 complete and 0 interrupted iterations
+catalog   [  28% ] 4 VUs  0m24.9s/1m30s
+
+running (0m26.0s), 4/4 VUs, 945 complete and 0 interrupted iterations
+catalog   [  29% ] 4 VUs  0m25.9s/1m30s
+
+running (0m27.0s), 4/4 VUs, 984 complete and 0 interrupted iterations
+catalog   [  30% ] 4 VUs  0m26.9s/1m30s
+
+running (0m28.0s), 4/4 VUs, 1028 complete and 0 interrupted iterations
+catalog   [  31% ] 4 VUs  0m27.9s/1m30s
+
+running (0m29.0s), 4/4 VUs, 1063 complete and 0 interrupted iterations
+catalog   [  32% ] 4 VUs  0m28.9s/1m30s
+
+running (0m30.0s), 4/4 VUs, 1102 complete and 0 interrupted iterations
+catalog   [  33% ] 4 VUs  0m29.9s/1m30s
+
+running (0m31.0s), 4/4 VUs, 1137 complete and 0 interrupted iterations
+catalog   [  34% ] 4 VUs  0m30.9s/1m30s
+
+running (0m32.0s), 4/4 VUs, 1173 complete and 0 interrupted iterations
+catalog   [  35% ] 4 VUs  0m31.9s/1m30s
+
+running (0m33.0s), 4/4 VUs, 1216 complete and 0 interrupted iterations
+catalog   [  37% ] 4 VUs  0m32.9s/1m30s
+
+running (0m34.0s), 4/4 VUs, 1253 complete and 0 interrupted iterations
+catalog   [  38% ] 4 VUs  0m33.9s/1m30s
+
+running (0m35.0s), 4/4 VUs, 1289 complete and 0 interrupted iterations
+catalog   [  39% ] 4 VUs  0m34.9s/1m30s
+
+running (0m36.0s), 4/4 VUs, 1321 complete and 0 interrupted iterations
+catalog   [  40% ] 4 VUs  0m35.9s/1m30s
+
+running (0m37.0s), 4/4 VUs, 1362 complete and 0 interrupted iterations
+catalog   [  41% ] 4 VUs  0m36.9s/1m30s
+
+running (0m38.0s), 4/4 VUs, 1402 complete and 0 interrupted iterations
+catalog   [  42% ] 4 VUs  0m37.9s/1m30s
+
+running (0m39.0s), 4/4 VUs, 1437 complete and 0 interrupted iterations
+catalog   [  43% ] 4 VUs  0m38.9s/1m30s
+
+running (0m40.0s), 4/4 VUs, 1474 complete and 0 interrupted iterations
+catalog   [  44% ] 4 VUs  0m39.9s/1m30s
+
+running (0m41.0s), 4/4 VUs, 1512 complete and 0 interrupted iterations
+catalog   [  45% ] 4 VUs  0m40.9s/1m30s
+
+running (0m42.0s), 4/4 VUs, 1549 complete and 0 interrupted iterations
+catalog   [  47% ] 4 VUs  0m41.9s/1m30s
+
+running (0m43.0s), 4/4 VUs, 1590 complete and 0 interrupted iterations
+catalog   [  48% ] 4 VUs  0m42.9s/1m30s
+
+running (0m44.0s), 4/4 VUs, 1626 complete and 0 interrupted iterations
+catalog   [  49% ] 4 VUs  0m43.9s/1m30s
+
+running (0m45.0s), 4/4 VUs, 1657 complete and 0 interrupted iterations
+catalog   [  50% ] 4 VUs  0m44.9s/1m30s
+
+running (0m46.0s), 4/4 VUs, 1701 complete and 0 interrupted iterations
+catalog   [  51% ] 4 VUs  0m45.9s/1m30s
+
+running (0m47.0s), 4/4 VUs, 1732 complete and 0 interrupted iterations
+catalog   [  52% ] 4 VUs  0m46.9s/1m30s
+
+running (0m48.0s), 4/4 VUs, 1774 complete and 0 interrupted iterations
+catalog   [  53% ] 4 VUs  0m47.9s/1m30s
+
+running (0m49.0s), 4/4 VUs, 1810 complete and 0 interrupted iterations
+catalog   [  54% ] 4 VUs  0m48.9s/1m30s
+
+running (0m50.0s), 4/4 VUs, 1845 complete and 0 interrupted iterations
+catalog   [  55% ] 4 VUs  0m49.9s/1m30s
+
+running (0m51.0s), 4/4 VUs, 1883 complete and 0 interrupted iterations
+catalog   [  57% ] 4 VUs  0m50.9s/1m30s
+
+running (0m52.0s), 4/4 VUs, 1919 complete and 0 interrupted iterations
+catalog   [  58% ] 4 VUs  0m51.9s/1m30s
+
+running (0m53.0s), 4/4 VUs, 1958 complete and 0 interrupted iterations
+catalog   [  59% ] 4 VUs  0m52.9s/1m30s
+
+running (0m54.0s), 4/4 VUs, 1993 complete and 0 interrupted iterations
+catalog   [  60% ] 4 VUs  0m53.9s/1m30s
+
+running (0m55.0s), 4/4 VUs, 2024 complete and 0 interrupted iterations
+catalog   [  61% ] 4 VUs  0m54.9s/1m30s
+
+running (0m56.0s), 4/4 VUs, 2067 complete and 0 interrupted iterations
+catalog   [  62% ] 4 VUs  0m55.9s/1m30s
+
+running (0m57.0s), 4/4 VUs, 2101 complete and 0 interrupted iterations
+catalog   [  63% ] 4 VUs  0m56.9s/1m30s
+
+running (0m58.0s), 4/4 VUs, 2137 complete and 0 interrupted iterations
+catalog   [  64% ] 4 VUs  0m57.9s/1m30s
+
+running (0m59.0s), 4/4 VUs, 2174 complete and 0 interrupted iterations
+catalog   [  65% ] 4 VUs  0m58.9s/1m30s
+
+running (1m00.0s), 4/4 VUs, 2213 complete and 0 interrupted iterations
+catalog   [  67% ] 4 VUs  0m59.9s/1m30s
+
+running (1m01.0s), 4/4 VUs, 2249 complete and 0 interrupted iterations
+catalog   [  68% ] 4 VUs  1m00.9s/1m30s
+
+running (1m02.0s), 4/4 VUs, 2286 complete and 0 interrupted iterations
+catalog   [  69% ] 4 VUs  1m01.9s/1m30s
+
+running (1m03.0s), 4/4 VUs, 2319 complete and 0 interrupted iterations
+catalog   [  70% ] 4 VUs  1m02.9s/1m30s
+
+running (1m04.0s), 4/4 VUs, 2353 complete and 0 interrupted iterations
+catalog   [  71% ] 4 VUs  1m03.9s/1m30s
+
+running (1m05.0s), 4/4 VUs, 2391 complete and 0 interrupted iterations
+catalog   [  72% ] 4 VUs  1m04.9s/1m30s
+
+running (1m06.0s), 4/4 VUs, 2427 complete and 0 interrupted iterations
+catalog   [  73% ] 4 VUs  1m05.9s/1m30s
+
+running (1m07.0s), 4/4 VUs, 2467 complete and 0 interrupted iterations
+catalog   [  74% ] 4 VUs  1m06.9s/1m30s
+
+running (1m08.0s), 4/4 VUs, 2503 complete and 0 interrupted iterations
+catalog   [  75% ] 4 VUs  1m07.9s/1m30s
+
+running (1m09.0s), 4/4 VUs, 2538 complete and 0 interrupted iterations
+catalog   [  77% ] 4 VUs  1m08.9s/1m30s
+
+running (1m10.0s), 4/4 VUs, 2574 complete and 0 interrupted iterations
+catalog   [  78% ] 4 VUs  1m09.9s/1m30s
+
+running (1m11.0s), 4/4 VUs, 2610 complete and 0 interrupted iterations
+catalog   [  79% ] 4 VUs  1m10.9s/1m30s
+
+running (1m12.0s), 4/4 VUs, 2642 complete and 0 interrupted iterations
+catalog   [  80% ] 4 VUs  1m11.9s/1m30s
+
+running (1m13.0s), 4/4 VUs, 2683 complete and 0 interrupted iterations
+catalog   [  81% ] 4 VUs  1m12.9s/1m30s
+
+running (1m14.0s), 4/4 VUs, 2719 complete and 0 interrupted iterations
+catalog   [  82% ] 4 VUs  1m13.9s/1m30s
+
+running (1m15.0s), 4/4 VUs, 2753 complete and 0 interrupted iterations
+catalog   [  83% ] 4 VUs  1m14.9s/1m30s
+
+running (1m16.0s), 4/4 VUs, 2793 complete and 0 interrupted iterations
+catalog   [  84% ] 4 VUs  1m15.9s/1m30s
+
+running (1m17.0s), 4/4 VUs, 2824 complete and 0 interrupted iterations
+catalog   [  85% ] 4 VUs  1m16.9s/1m30s
+
+running (1m18.0s), 4/4 VUs, 2867 complete and 0 interrupted iterations
+catalog   [  87% ] 4 VUs  1m17.9s/1m30s
+
+running (1m19.0s), 4/4 VUs, 2901 complete and 0 interrupted iterations
+catalog   [  88% ] 4 VUs  1m18.9s/1m30s
+
+running (1m20.0s), 4/4 VUs, 2940 complete and 0 interrupted iterations
+catalog   [  89% ] 4 VUs  1m19.9s/1m30s
+
+running (1m21.0s), 4/4 VUs, 2972 complete and 0 interrupted iterations
+catalog   [  90% ] 4 VUs  1m20.9s/1m30s
+
+running (1m22.0s), 4/4 VUs, 3008 complete and 0 interrupted iterations
+catalog   [  91% ] 4 VUs  1m21.9s/1m30s
+
+running (1m23.0s), 4/4 VUs, 3050 complete and 0 interrupted iterations
+catalog   [  92% ] 4 VUs  1m22.9s/1m30s
+
+running (1m24.0s), 4/4 VUs, 3086 complete and 0 interrupted iterations
+catalog   [  93% ] 4 VUs  1m23.9s/1m30s
+
+running (1m25.0s), 4/4 VUs, 3120 complete and 0 interrupted iterations
+catalog   [  94% ] 4 VUs  1m24.9s/1m30s
+
+running (1m26.0s), 4/4 VUs, 3163 complete and 0 interrupted iterations
+catalog   [  95% ] 4 VUs  1m25.9s/1m30s
+
+running (1m27.0s), 4/4 VUs, 3196 complete and 0 interrupted iterations
+catalog   [  97% ] 4 VUs  1m26.9s/1m30s
+
+running (1m28.0s), 4/4 VUs, 3236 complete and 0 interrupted iterations
+catalog   [  98% ] 4 VUs  1m27.9s/1m30s
+
+running (1m29.0s), 4/4 VUs, 3272 complete and 0 interrupted iterations
+catalog   [  99% ] 4 VUs  1m28.9s/1m30s
+
+running (1m30.0s), 4/4 VUs, 3305 complete and 0 interrupted iterations
+catalog   [ 100% ] 4 VUs  1m29.9s/1m30s
+
+================ DSP benchmark summary ================
+-- per-phase latency --
+  catalog                    p50=114.6 ms  p95=157.0 ms  p99=177.1 ms  max=242.8 ms  n=3313
+  negotiation init (POST)    (no data)
+  time-to-AGREED (async)     (no data)
+  transfer init (POST)       (no data)
+  time-to-EDR (async)        (no data)
+  data pull                  (no data)
+-- end-to-end + throughput --
+  e2e transaction            (no data)
+  data throughput (MB/s)     (no data)
+-- outcomes --
+  transactions succeeded     count=3313  rate=36.708/s
+  transactions failed        (no data)
+  failed rate                rate=0.00%  (pass=0 fail=3313)
+    of which TERMINATED      (no data)
+    of which TIMED OUT       (no data)
+    of which HTTP-FAILED     (no data)
+  failure accounting       (no failures)
+-- observer effect (poll load) --
+  negotiation polls          (no data)
+  edr polls                  (no data)
+  polls per transaction     negotiation=0.0  edr=0.0  (timeout ceiling=120)
+=======================================================
+(full summary -> /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/results/factoryx/on/catalog-sweep/2026-08-02T15-39-02Z/k6-summary.json; POLL_INTERVAL_MS=250; IDENTITY_MODE=on)
+
+running (1m30.3s), 0/4 VUs, 3313 complete and 0 interrupted iterations
+catalog ✓ [ 100% ] 4 VUs  1m30s

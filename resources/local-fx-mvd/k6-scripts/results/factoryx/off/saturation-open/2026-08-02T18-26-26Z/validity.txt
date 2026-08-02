@@ -1,0 +1,1 @@
+VALIDITY  ok=697  failed=708  failed_rate=50%  dropped_iterations=431  <-- OFFERED RATE NOT DELIVERED (raise MAX_VUS or lower RATE)  <-- >5% FAILURES: past the knee, not a valid operating point
