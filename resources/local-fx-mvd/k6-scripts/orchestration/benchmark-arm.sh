@@ -36,6 +36,12 @@ CONFIG_PATH="$ROOT/config/${CONNECTOR}.json"
 # --- knobs -----------------------------------------------------------------
 GAP="${GAP:-120}"                 # seconds between scenarios, ON TOP of run.sh's settle
 REPS_STEADY="${REPS_STEADY:-2}"   # steady carries the RQ1 comparison, so it repeats
+# catalog-sweep is a CURVE (4 sizes), and a single run per size gives no way to tell
+# a scaling effect from run-to-run noise. The 2026-08-01 DST run showed size=100
+# landing BELOW size=10 on the identity-ON arm — plausible noise, but unfalsifiable
+# at n=1. Same reasoning as REPS_STEADY: the scenarios that carry a headline claim
+# repeat, the diagnostic ones do not.
+REPS_CATALOG="${REPS_CATALOG:-2}"
 WITH_SOAK="${WITH_SOAK:-1}"
 WITH_PAYLOAD="${WITH_PAYLOAD:-1}"
 WITH_EXPORT="${WITH_EXPORT:-1}"
@@ -160,7 +166,7 @@ fi
 
 # 5. RQ5 catalog scaling (EDC family only — needs a Management API to seed)
 if [ "$HAS_MGMT" = "yes" ]; then
-  step "catalog-sweep (1/10/100/1000)" "$HERE/run-matrix.sh" "$CONNECTOR" 1 catalog-sweep
+  step "catalog-sweep x${REPS_CATALOG} (1/10/100/1000)" "$HERE/run-matrix.sh" "$CONNECTOR" "$REPS_CATALOG" catalog-sweep
   gap
 fi
 

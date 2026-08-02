@@ -29,10 +29,17 @@ q() {
     --data-urlencode "query=$expr" \
     --data-urlencode "start=$START" --data-urlencode "end=$END" --data-urlencode "step=5" \
     | jq -r '.data.result[]? as $s
-             | (($s.metric.service_name // $s.metric.instance // "all")) as $lbl
+             # Label = service_name, or "service/status" when the query also groups by
+             # status code. Queries that group only by service keep their old label, so
+             # CSVs stay comparable with the runs already archived.
+             | ([$s.metric.service_name, $s.metric.http_response_status_code]
+                | map(select(. != null)) | join("/")) as $joined
+             | (if $joined == "" then ($s.metric.instance // "all") else $joined end) as $lbl
              | $s.values[]? | [$lbl, .[0], .[1]] | @csv' >> "$f" 2>/dev/null || true
   echo "  $name.csv ($(($(wc -l < "$f") - 1)) rows)"
 }
+
+rows() { echo $(( $(wc -l < "$RESULT_DIR/$1.csv" 2>/dev/null || echo 1) - 1 )); }
 
 echo "Prometheus snapshot [$START..$END] svc=($SVC) win=$W -> $RESULT_DIR"
 
@@ -45,7 +52,32 @@ q jvm-threads  "sum by (service_name) (jvm_thread_count{service_name=~\"$SVC\"})
 q http-throughput "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$SVC\"}[$W]))"
 q http-p95        "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$SVC\"}[$W])))"
 q http-errors     "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$SVC\", http_response_status_code=~\"4..|5..\"}[$W]))"
+# 4xx and 5xx are NOT the same finding and must never share a series. Most 4xx here
+# are the harness's own EDR/negotiation poll loop reading 404 until the resource
+# exists — expected, and present even at 1 tx/s. A 5xx is the connector failing.
+# Reporting "errors/s" without the split overstates connector faults by ~100x.
+q http-errors-5xx "sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~\"$SVC\", http_response_status_code=~\"5..\"}[$W]))"
+# Full breakdown (service/code), so a 4xx spike can be attributed to a specific code
+# rather than assumed to be the poll loop.
+q http-status     "sum by (service_name, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=~\"$SVC\", http_response_status_code=~\"4..|5..\"}[$W]))"
 
 # --- host ceiling (node-exporter) — tells you if the knee is the host, not the connector ---
 q host-cpu-busy   "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$W])))"
 q host-mem-used   "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1024 / 1024"
+
+# --- 5xx verdict ------------------------------------------------------------
+# An empty http-errors-5xx.csv is ambiguous on its own: it means either "the
+# connector returned no 5xx" or "the status-code label was never scraped". Only the
+# first is a thesis claim. Cross-check against http-status: if THAT has rows, the
+# label pipeline demonstrably works, so an empty 5xx file is a real zero. Written to
+# the run folder so the claim survives without re-querying a torn-down Prometheus.
+S5="$(rows http-errors-5xx)"; SA="$(rows http-status)"
+if [ "$S5" -gt 0 ]; then
+  VERDICT="5xx PRESENT ($S5 samples) — connector-side faults, see http-errors-5xx.csv"
+elif [ "$SA" -gt 0 ]; then
+  VERDICT="no 5xx in window (confirmed: http-status has $SA samples, so the status label IS scraped)"
+else
+  VERDICT="INCONCLUSIVE — no 4xx or 5xx samples at all; status-code label may be missing, do NOT claim zero 5xx"
+fi
+echo "$VERDICT" > "$RESULT_DIR/http-5xx-verdict.txt"
+echo "  5xx: $VERDICT"
