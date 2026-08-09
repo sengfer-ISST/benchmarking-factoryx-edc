@@ -38,7 +38,15 @@ else
 fi
 CATALOG_SIZE="${CATALOG_SIZE:-1}"           # G1.RQ6: # provider assets to seed (catalog-sweep only)
 WARMUP_DURATION="${WARMUP_DURATION:-60s}"
-WARMUP_RATE="${WARMUP_RATE:-2}"
+# Must not exceed the measured rate. At the old value of 2/s the warmup ran ABOVE
+# the knee of the two slowest arms, so it handed the measured window a backlog it
+# had not created — the opposite of what a warmup is for. Track steady.js.
+WARMUP_RATE="${WARMUP_RATE:-1}"
+# Seconds between the end of the warmup and the start of the measured window, so
+# transactions still in flight at the end of the warmup complete OUTSIDE it. There
+# was no such gap before: START_EPOCH was taken the instant the warmup process
+# exited, and k6 exits while its last iterations are still draining.
+WARMUP_DRAIN="${WARMUP_DRAIN:-20}"
 PROM_URL="${PROM_URL:-$(jq -r '.prometheus.baseUrl // "http://localhost:9090"' "$CONFIG_PATH")}"
 PROM_RATE_WINDOW="${PROM_RATE_WINDOW:-1m}"
 CANONICAL_DIR="${CANONICAL_DIR:-}"          # set to the canonical k6-scripts to enforce parity
@@ -97,6 +105,10 @@ if [ "$SKIP_WARMUP" != "1" ]; then
     --tag phase=warmup \
     "$ROOT/$SCENARIO_DIR/steady.js" >/dev/null 2>&1 || echo "  (warmup non-zero exit ignored)"
   rm -rf "$WARMUP_DIR"
+  if [ "$WARMUP_DRAIN" -gt 0 ]; then
+    echo "  draining ${WARMUP_DRAIN}s before the measured window opens"
+    sleep "$WARMUP_DRAIN"
+  fi
 fi
 
 # --- 4. measured run ---

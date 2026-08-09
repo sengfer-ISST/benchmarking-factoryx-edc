@@ -28,16 +28,23 @@ CONNECTOR="${1:-}"; SCENARIO="${2:-}"
 GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
 GF_USER="${GF_USER:-admin}"; GF_PASS="${GF_PASS:-admin}"
 OUTDIR="${OUTDIR:-$ROOT/figures}"
-THEME="${THEME:-light}"           # light = print-friendly; the thesis figures want this
+THEME="${THEME:-dark}"            # THEME=light for a print-oriented variant
 WIDTH="${WIDTH:-1200}"; HEIGHT="${HEIGHT:-450}"
-ALL_RUNS="${ALL_RUNS:-0}"         # 0 = newest run per combination (one figure each)
+ALL_RUNS="${ALL_RUNS:-0}"         # 0 = one figure per combination (the first repetition)
 PAD="${PAD:-15}"                  # seconds of context either side of the window
 
 # --- what to export --------------------------------------------------------
-# PROFILE=thesis (default): each scenario exports ONLY the panels its research
-#   question needs — the §5 Scenario-to-RQ map in COMMANDS-CHEATSHEET.md. Exporting
-#   all ten panels for every run produces mostly figures nobody puts in a thesis.
-# PROFILE=all: every panel for every run (the old behaviour, for exploration).
+# PROFILE=thesis (default): FOUR panels per arm. These images are not the
+#   measurement — the measurement of record is the k6 summary and the Prometheus
+#   snapshot CSVs, and every number in the results chapter comes from those. Their
+#   job is narrower: to show that the campaign was actually executed and that the
+#   system behaved as the tables claim. Anything a table or a pgfplots chart states
+#   better does not earn a screenshot, which is why the sweeps export nothing: a
+#   catalog or payload curve is four or five numbers, and four or five dashboard
+#   images say it worse than one table row each.
+#   The earlier profile exported ~30 images per arm (~180 for a campaign), of which
+#   the great majority were per-size sweep panels nobody would print.
+# PROFILE=all: every panel for every run — exploration and debugging, not the thesis.
 # PANELS="uid:id:slug …": explicit override, wins over both.
 #
 # Panel reference — edc-api-red: 200 tx outcome, 201 failures by reason,
@@ -50,28 +57,33 @@ edc-api-red:202:polls-per-tx edc-api-red:4:api-latency edc-api-red:1:request-rat
 edc-api-red:6:jvm-heap edc-api-red:7:jvm-gc edc-api-red:8:jvm-threads \
 rYdddlPWk:77:host-cpu rYdddlPWk:78:host-mem"
 
-# Per-scenario sets. `smoke` is deliberately empty: it is a pass/fail gate, not a
-# figure. Every panel listed here earns its place in a chapter.
+# Per-scenario sets. Four images per arm, each answering a question no table
+# answers as well. Everything else is deliberately empty — including the two
+# sweeps, whose results are curves of four or five points and belong in a table.
 panels_for() {
   case "$1" in
-    smoke)              echo "" ;;                                    # gate only
-    # RQ1 head-to-head + RQ4 async cycle + one resource profile at the operating point
-    steady)             echo "edc-api-red:200:tx-outcome edc-api-red:203:async-latency \
-edc-api-red:4:api-latency edc-api-red:6:jvm-heap" ;;
-    # RQ2 open model: the knee. host-cpu proves the knee is the connector, not the box.
-    saturation-open)    echo "edc-api-red:200:tx-outcome edc-api-red:4:api-latency \
-edc-api-red:1:request-rate edc-api-red:202:polls-per-tx rYdddlPWk:77:host-cpu" ;;
-    # RQ2 closed model, reported beside the open one
-    concurrency-closed) echo "edc-api-red:200:tx-outcome edc-api-red:4:api-latency \
-edc-api-red:1:request-rate" ;;
-    # RQ5: catalog latency against catalog size — one panel, one figure per size
-    catalog-sweep)      echo "edc-api-red:4:api-latency" ;;
-    # RQ1 data plane: throughput against payload size
-    payload-sweep)      echo "edc-api-red:1:request-rate edc-api-red:4:api-latency" ;;
-    # RQ3 endurance: drift over the window is the whole point
-    soak)               echo "edc-api-red:6:jvm-heap edc-api-red:7:jvm-gc \
-edc-api-red:8:jvm-threads rYdddlPWk:78:host-mem" ;;
-    *)                  echo "$ALL_PANELS" ;;
+    # The operating point ran cleanly: transactions succeeding at a steady rate for
+    # the whole window. This is the "the benchmark ran" image.
+    steady)             echo "edc-api-red:200:tx-outcome" ;;
+    # The knee, and the control for it. tx-outcome shows where success gives way to
+    # failure as offered load rises; host-cpu shows the machine still had headroom
+    # when it did, which is what makes the knee a property of the connector.
+    saturation-open)    echo "edc-api-red:200:tx-outcome rYdddlPWk:77:host-cpu" ;;
+    # Drift over a long window is inherently a picture: a slope in a table is a
+    # number, but whether the series is stationary or climbing is something a
+    # reader should see.
+    soak)               echo "edc-api-red:6:jvm-heap" ;;
+    # Gates, controls and sweeps: no figure.
+    #   smoke             pass/fail gate, not a measurement
+    #   poll-sensitivity  its result is a three-number comparison
+    #   concurrency-closed corroborates saturation-open; the table carries it
+    #   catalog-sweep     a four-point curve -> table
+    #   payload-sweep     a five-point curve -> table (and 10 images per arm)
+    smoke|poll-sensitivity|concurrency-closed|catalog-sweep|payload-sweep) echo "" ;;
+    # An unrecognised scenario exports nothing rather than everything: the old
+    # fallback was ALL_PANELS, so adding a scenario silently added ten images per
+    # run to the campaign.
+    *)                  echo "" ;;
   esac
 }
 
@@ -101,8 +113,18 @@ rm -f /tmp/.gf_probe.$$
 echo "renderer OK -> $OUTDIR (profile=$PROFILE theme=$THEME ${WIDTH}x${HEIGHT})"
 
 # --- pick the runs ---------------------------------------------------------
-# Newest run per (connector, arm, scenario) unless ALL_RUNS=1: for a thesis figure you
-# want one representative image, not one per repetition.
+# ONE run per (connector, arm, scenario, sweep-variant) unless ALL_RUNS=1: a thesis
+# figure wants one representative image, not one per repetition. The repetitions are
+# still all present in results/ and all of them feed the numbers; only the picture
+# comes from a single run.
+#
+# Which one: the FIRST repetition. Paths carry an ISO-8601 timestamp, so `sort` orders
+# them chronologically ascending and the first match per key wins. (An earlier comment
+# here claimed "newest" — it was wrong, and the behaviour is what shipped for the
+# 2026-08 campaigns. Do NOT "fix" it to newest: Prometheus is wiped by cleanup.sh, so
+# already-exported connectors cannot be re-rendered, and switching now would leave one
+# connector's figures drawn from a different repetition than the others'. Consistency
+# across connectors is worth more than the choice of repetition, which is arbitrary.)
 mapfile -t METAS < <(find "$ROOT/results" -name meta.json | sort)
 declare -A SEEN
 count=0; failed=0; skipped=0
@@ -125,7 +147,7 @@ for m in "${METAS[@]}"; do
 
   key="${c}_${arm}_${sc}${variant}"
   if [ "$ALL_RUNS" != "1" ]; then
-    [ -n "${SEEN[$key]:-}" ] && continue      # metas are sorted, so this keeps the newest
+    [ -n "${SEEN[$key]:-}" ] && continue      # metas sort ascending, so this keeps the FIRST
     SEEN[$key]=1
   else
     key="${key}_${run}"
@@ -163,9 +185,10 @@ echo "exported $count panel(s) to $OUTDIR${failed:+, $failed failed}${skipped:+,
 cat <<EOF
 
 Use in LaTeX:
-  \\includegraphics[width=\\textwidth]{figures/factoryx_on_steady_async-latency}
-Export one connector/scenario only:  $0 factoryx steady
-Every repetition instead of newest:  ALL_RUNS=1 $0
-Every panel for every run:           PROFILE=all $0
-A specific panel set:                PANELS="edc-api-red:200:tx-outcome" $0
+  \\includegraphics[width=\\textwidth]{figures/factoryx_on_steady_tx-outcome}
+Export one connector/scenario only:   $0 factoryx steady
+Every repetition, not just the first: ALL_RUNS=1 $0
+Every panel for every run:            PROFILE=all $0
+A specific panel set:                 PANELS="edc-api-red:200:tx-outcome" $0
+A light-theme variant instead:        THEME=light $0
 EOF

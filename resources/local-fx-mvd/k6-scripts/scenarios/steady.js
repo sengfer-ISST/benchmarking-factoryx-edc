@@ -14,6 +14,16 @@
 // The default is intentionally conservative. The first Factory-X campaign ran the
 // old default of 5/s, which sat above that connector's knee (~3-5 tx/s): all
 // three repetitions returned 0-9% success and measured queueing, not steady state.
+//
+// LOWERED 2/s -> 1/s after the first measured campaign, because 2/s still broke the
+// rule above. The saturation ladders put the slowest arm, Factory-X identity-ON, at
+// a knee between 1.5 and 2.5 tx/s, and BaSyx identity-ON missed the 30 s deadline on
+// 7-10% of transactions at 2/s — so two of the six arms were being measured at or
+// past saturation. Their latency percentiles were then censored (a timed-out
+// transaction contributes the deadline, not its real duration), which makes them
+// lower bounds rather than measurements, and RQ1 was comparing two connectors in
+// steady state against one in overload. At 1/s every arm delivers its offered rate.
+// Capacity questions belong to saturation-open, not here.
 import { baseOptions } from '../lib/options.js';
 import { seedProvider } from '../lib/seed.js';
 import { runTransaction } from '../lib/flow.js';
@@ -23,7 +33,7 @@ export const options = Object.assign({}, baseOptions, {
   scenarios: {
     steady: {
       executor: 'constant-arrival-rate',
-      rate: Number(__ENV.RATE || 2),            // full DSP transactions / sec
+      rate: Number(__ENV.RATE || 1),            // full DSP transactions / sec
       timeUnit: '1s',
       duration: __ENV.DURATION || '5m',
       // Each transaction holds a VU through both async polls (seconds), so the

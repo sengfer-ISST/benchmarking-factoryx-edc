@@ -1,7 +1,9 @@
 // (optional) SOAK / ENDURANCE — open model, sustained moderate load over a long
 // window. Purpose: catch memory leaks and GC degradation over time (RQ3 stability)
 // — watch jvm_memory_used_bytes drift and jvm_gc_duration in the Prometheus
-// snapshot / Grafana. Default 1h; override DURATION/RATE as needed.
+// snapshot / Grafana. Default 30m; override DURATION/RATE as needed. Thirty
+// minutes is long enough to show that nothing is growing fast enough to exhaust
+// the heap on that timescale, but it cannot rule out a slow leak — say only that.
 //
 // RATE must be BELOW the steady rate, and identical across connectors for the
 // same reason (see steady.js). A soak above the knee measures how a queue grows,
@@ -18,7 +20,10 @@ export const options = Object.assign({}, baseOptions, {
   scenarios: {
     soak: {
       executor: 'constant-arrival-rate',
-      rate: Number(__ENV.RATE || 1),
+      // Halved with the steady rate (2 -> 1), keeping the "soak below steady" rule
+      // stated above: a soak at the operating point measures a queue forming, not a
+      // runtime ageing.
+      rate: Number(__ENV.RATE || 0.5),
       timeUnit: '1s',
       duration: __ENV.DURATION || '30m',
       preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 50),

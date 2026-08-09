@@ -25,7 +25,15 @@ import { runTransaction } from '../lib/flow.js';
 import { buildSummary } from '../lib/metrics.js';
 
 const STAGE = __ENV.STAGE_DURATION || '90s';
-const RATES = String(__ENV.RATES || '1,2,3,5,8,12')
+// LADDER RESHAPED 2026-08 after the first measured campaign. The old ladder
+// (1,2,3,5,8,12) spent its top two rungs far past every connector's knee and had
+// only two rungs bracketing it: k6 ramps linearly, so the rates actually OFFERED
+// were 1, 1.5, 2.5, 4, 6.5, 10 tx/s, while the knee sat between 2.5 and 4 on all
+// three connectors. Rungs 5 and 6 therefore bought no resolution and cost VU
+// exhaustion (see preAllocatedVUs). The linear ladder offers 1, 1.5, 2.5, 3.5,
+// 4.5, 5.5 — four rungs in the region that decides the answer, at the same
+// wall-clock cost. Widen it only if a connector clears every rung.
+const RATES = String(__ENV.RATES || '1,2,3,4,5,6')
   .split(',').map((s) => Number(s.trim())).filter((n) => n > 0);
 
 // One stage per rung, plus a hold at the top rung to observe the steady tail.
@@ -42,7 +50,15 @@ export const options = Object.assign({}, baseOptions, {
       // transaction occupies a VU for the full POLL_TIMEOUT, so an undersized
       // pool drops iterations and you measure k6, not the SUT — check
       // `dropped_iterations` in the summary before trusting any result.
-      preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 100),
+      //
+      // PRE-ALLOCATE, DO NOT GROW. In the first campaign this was 100 and every
+      // EDC saturation run ended with the active VU count pinned to the pool size
+      // and hundreds of dropped iterations (dst 596, factoryx 363-431) — k6 never
+      // reached maxVUs=800, it simply could not INITIALISE new VUs fast enough
+      // mid-ramp, because allocation runs the init context. Pre-allocating past
+      // the worst case (6 tx/s x 30 s timeout = 180, with headroom for the
+      // backlog) means nothing is allocated inside the measured window.
+      preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 600),
       maxVUs: Number(__ENV.MAX_VUS || 800),
       stages: stages,
       tags: { scenario: 'saturation' },
