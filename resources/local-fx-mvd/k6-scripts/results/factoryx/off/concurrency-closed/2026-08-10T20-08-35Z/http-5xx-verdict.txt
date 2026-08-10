@@ -1,0 +1,1 @@
+5xx PRESENT (112 samples) — connector-side faults, see http-errors-5xx.csv
