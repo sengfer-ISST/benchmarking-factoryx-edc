@@ -1,0 +1,239 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/scenarios/payload-sweep.js
+        output: Prometheus remote write (http://localhost:9090/api/v1/write)
+
+     scenarios: (100.00%) 1 scenario, 4 max VUs, 1m30s max duration (incl. graceful stop):
+              * pull: 4 looping VUs for 1m0s (gracefulStop: 30s)
+
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+
+Run    [ 100% ] setup()
+pull   [   0% ]
+
+running (0m06.0s), 4/4 VUs, 539 complete and 0 interrupted iterations
+pull   [   1% ] 4 VUs  0m00.7s/1m0s
+
+running (0m07.0s), 4/4 VUs, 1280 complete and 0 interrupted iterations
+pull   [   3% ] 4 VUs  0m01.7s/1m0s
+
+running (0m08.0s), 4/4 VUs, 2074 complete and 0 interrupted iterations
+pull   [   5% ] 4 VUs  0m02.7s/1m0s
+
+running (0m09.0s), 4/4 VUs, 2885 complete and 0 interrupted iterations
+pull   [   6% ] 4 VUs  0m03.7s/1m0s
+
+running (0m10.0s), 4/4 VUs, 3694 complete and 0 interrupted iterations
+pull   [   8% ] 4 VUs  0m04.7s/1m0s
+
+running (0m11.0s), 4/4 VUs, 4525 complete and 0 interrupted iterations
+pull   [  10% ] 4 VUs  0m05.7s/1m0s
+
+running (0m12.0s), 4/4 VUs, 5322 complete and 0 interrupted iterations
+pull   [  11% ] 4 VUs  0m06.7s/1m0s
+
+running (0m13.0s), 4/4 VUs, 6118 complete and 0 interrupted iterations
+pull   [  13% ] 4 VUs  0m07.7s/1m0s
+
+running (0m14.0s), 4/4 VUs, 6928 complete and 0 interrupted iterations
+pull   [  15% ] 4 VUs  0m08.7s/1m0s
+
+running (0m15.0s), 4/4 VUs, 7749 complete and 0 interrupted iterations
+pull   [  16% ] 4 VUs  0m09.7s/1m0s
+
+running (0m16.0s), 4/4 VUs, 8567 complete and 0 interrupted iterations
+pull   [  18% ] 4 VUs  0m10.7s/1m0s
+
+running (0m17.0s), 4/4 VUs, 9387 complete and 0 interrupted iterations
+pull   [  20% ] 4 VUs  0m11.7s/1m0s
+
+running (0m18.0s), 4/4 VUs, 10197 complete and 0 interrupted iterations
+pull   [  21% ] 4 VUs  0m12.7s/1m0s
+
+running (0m19.0s), 4/4 VUs, 11005 complete and 0 interrupted iterations
+pull   [  23% ] 4 VUs  0m13.7s/1m0s
+
+running (0m20.0s), 4/4 VUs, 11832 complete and 0 interrupted iterations
+pull   [  25% ] 4 VUs  0m14.7s/1m0s
+
+running (0m21.0s), 4/4 VUs, 12649 complete and 0 interrupted iterations
+pull   [  26% ] 4 VUs  0m15.7s/1m0s
+
+running (0m22.0s), 4/4 VUs, 13463 complete and 0 interrupted iterations
+pull   [  28% ] 4 VUs  0m16.7s/1m0s
+
+running (0m23.0s), 4/4 VUs, 14252 complete and 0 interrupted iterations
+pull   [  30% ] 4 VUs  0m17.7s/1m0s
+
+running (0m24.0s), 4/4 VUs, 15084 complete and 0 interrupted iterations
+pull   [  31% ] 4 VUs  0m18.7s/1m0s
+
+running (0m25.0s), 4/4 VUs, 15892 complete and 0 interrupted iterations
+pull   [  33% ] 4 VUs  0m19.7s/1m0s
+
+running (0m26.0s), 4/4 VUs, 16708 complete and 0 interrupted iterations
+pull   [  35% ] 4 VUs  0m20.7s/1m0s
+
+running (0m27.0s), 4/4 VUs, 17527 complete and 0 interrupted iterations
+pull   [  36% ] 4 VUs  0m21.7s/1m0s
+
+running (0m28.0s), 4/4 VUs, 18332 complete and 0 interrupted iterations
+pull   [  38% ] 4 VUs  0m22.7s/1m0s
+
+running (0m29.0s), 4/4 VUs, 19144 complete and 0 interrupted iterations
+pull   [  40% ] 4 VUs  0m23.7s/1m0s
+
+running (0m30.0s), 4/4 VUs, 19953 complete and 0 interrupted iterations
+pull   [  41% ] 4 VUs  0m24.7s/1m0s
+
+running (0m31.0s), 4/4 VUs, 20772 complete and 0 interrupted iterations
+pull   [  43% ] 4 VUs  0m25.7s/1m0s
+
+running (0m32.0s), 4/4 VUs, 21634 complete and 0 interrupted iterations
+pull   [  45% ] 4 VUs  0m26.7s/1m0s
+
+running (0m33.0s), 4/4 VUs, 22484 complete and 0 interrupted iterations
+pull   [  46% ] 4 VUs  0m27.7s/1m0s
+
+running (0m34.0s), 4/4 VUs, 23347 complete and 0 interrupted iterations
+pull   [  48% ] 4 VUs  0m28.7s/1m0s
+
+running (0m35.0s), 4/4 VUs, 24163 complete and 0 interrupted iterations
+pull   [  50% ] 4 VUs  0m29.7s/1m0s
+
+running (0m36.0s), 4/4 VUs, 24982 complete and 0 interrupted iterations
+pull   [  51% ] 4 VUs  0m30.7s/1m0s
+
+running (0m37.0s), 4/4 VUs, 25797 complete and 0 interrupted iterations
+pull   [  53% ] 4 VUs  0m31.7s/1m0s
+
+running (0m38.0s), 4/4 VUs, 26594 complete and 0 interrupted iterations
+pull   [  55% ] 4 VUs  0m32.7s/1m0s
+
+running (0m39.0s), 4/4 VUs, 27416 complete and 0 interrupted iterations
+pull   [  56% ] 4 VUs  0m33.7s/1m0s
+
+running (0m40.0s), 4/4 VUs, 28256 complete and 0 interrupted iterations
+pull   [  58% ] 4 VUs  0m34.7s/1m0s
+
+running (0m41.0s), 4/4 VUs, 29091 complete and 0 interrupted iterations
+pull   [  60% ] 4 VUs  0m35.7s/1m0s
+
+running (0m42.0s), 4/4 VUs, 29933 complete and 0 interrupted iterations
+pull   [  61% ] 4 VUs  0m36.7s/1m0s
+
+running (0m43.0s), 4/4 VUs, 30775 complete and 0 interrupted iterations
+pull   [  63% ] 4 VUs  0m37.7s/1m0s
+
+running (0m44.0s), 4/4 VUs, 31612 complete and 0 interrupted iterations
+pull   [  65% ] 4 VUs  0m38.7s/1m0s
+
+running (0m45.0s), 4/4 VUs, 32452 complete and 0 interrupted iterations
+pull   [  66% ] 4 VUs  0m39.7s/1m0s
+
+running (0m46.0s), 4/4 VUs, 33294 complete and 0 interrupted iterations
+pull   [  68% ] 4 VUs  0m40.7s/1m0s
+
+running (0m47.0s), 4/4 VUs, 34130 complete and 0 interrupted iterations
+pull   [  70% ] 4 VUs  0m41.7s/1m0s
+
+running (0m48.0s), 4/4 VUs, 34890 complete and 0 interrupted iterations
+pull   [  71% ] 4 VUs  0m42.7s/1m0s
+
+running (0m49.0s), 4/4 VUs, 35631 complete and 0 interrupted iterations
+pull   [  73% ] 4 VUs  0m43.7s/1m0s
+
+running (0m50.0s), 4/4 VUs, 36366 complete and 0 interrupted iterations
+pull   [  75% ] 4 VUs  0m44.7s/1m0s
+
+running (0m51.0s), 4/4 VUs, 37103 complete and 0 interrupted iterations
+pull   [  76% ] 4 VUs  0m45.7s/1m0s
+
+running (0m52.0s), 4/4 VUs, 37841 complete and 0 interrupted iterations
+pull   [  78% ] 4 VUs  0m46.7s/1m0s
+
+running (0m53.0s), 4/4 VUs, 38578 complete and 0 interrupted iterations
+pull   [  80% ] 4 VUs  0m47.7s/1m0s
+
+running (0m54.0s), 4/4 VUs, 39305 complete and 0 interrupted iterations
+pull   [  81% ] 4 VUs  0m48.7s/1m0s
+
+running (0m55.0s), 4/4 VUs, 40053 complete and 0 interrupted iterations
+pull   [  83% ] 4 VUs  0m49.7s/1m0s
+
+running (0m56.0s), 4/4 VUs, 40772 complete and 0 interrupted iterations
+pull   [  85% ] 4 VUs  0m50.7s/1m0s
+
+running (0m57.0s), 4/4 VUs, 41505 complete and 0 interrupted iterations
+pull   [  86% ] 4 VUs  0m51.7s/1m0s
+
+running (0m58.0s), 4/4 VUs, 42216 complete and 0 interrupted iterations
+pull   [  88% ] 4 VUs  0m52.7s/1m0s
+
+running (0m59.0s), 4/4 VUs, 42938 complete and 0 interrupted iterations
+pull   [  90% ] 4 VUs  0m53.7s/1m0s
+
+running (1m00.0s), 4/4 VUs, 43667 complete and 0 interrupted iterations
+pull   [  91% ] 4 VUs  0m54.7s/1m0s
+
+running (1m01.0s), 4/4 VUs, 44412 complete and 0 interrupted iterations
+pull   [  93% ] 4 VUs  0m55.7s/1m0s
+
+running (1m02.0s), 4/4 VUs, 45131 complete and 0 interrupted iterations
+pull   [  95% ] 4 VUs  0m56.7s/1m0s
+
+running (1m03.0s), 4/4 VUs, 45840 complete and 0 interrupted iterations
+pull   [  96% ] 4 VUs  0m57.7s/1m0s
+
+running (1m04.0s), 4/4 VUs, 46562 complete and 0 interrupted iterations
+pull   [  98% ] 4 VUs  0m58.7s/1m0s
+
+running (1m05.0s), 4/4 VUs, 47278 complete and 0 interrupted iterations
+pull   [ 100% ] 4 VUs  0m59.7s/1m0s
+
+================ DSP benchmark summary ================
+-- per-phase latency --
+  catalog                    p50=141.9 ms  p95=141.9 ms  p99=141.9 ms  max=141.9 ms  n=1
+  negotiation init (POST)    p50=5.0 ms  p95=5.0 ms  p99=5.0 ms  max=5.0 ms  n=1
+  time-to-AGREED (async)     p50=4061.0 ms  p95=4061.0 ms  p99=4061.0 ms  max=4061.0 ms  n=1
+  transfer init (POST)       p50=42.5 ms  p95=42.5 ms  p99=42.5 ms  max=42.5 ms  n=1
+  time-to-EDR (async)        p50=1019.0 ms  p95=1019.0 ms  p99=1019.0 ms  max=1019.0 ms  n=1
+  data pull                  p50=4.3 ms  p95=7.9 ms  p99=21.1 ms  max=37.0 ms  n=47485
+-- end-to-end + throughput --
+  e2e transaction            (no data)
+  data throughput (MB/s)     p50=24.0  p95=28.7  p99=31.1  max=39.4  n=47485
+-- outcomes --
+  transactions succeeded     (no data)
+  transactions failed        (no data)
+  failed rate                rate=0.00%  (pass=0 fail=0)
+    of which TERMINATED      (no data)
+    of which TIMED OUT       (no data)
+    of which HTTP-FAILED     (no data)
+  failure accounting       (no failures)
+-- observer effect (poll load) --
+  negotiation polls          count=17  rate=0.260/s
+  edr polls                  count=5  rate=0.077/s
+  polls per transaction     (no data)
+=======================================================
+(full summary -> /home/rohitj/edc/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts/results/factoryx/on/payload-sweep/2026-08-10T16-42-34Z/k6-summary.json; POLL_INTERVAL_MS=250; IDENTITY_MODE=on)
+
+running (1m05.3s), 0/4 VUs, 47485 complete and 0 interrupted iterations
+pull ✓ [ 100% ] 4 VUs  1m0s

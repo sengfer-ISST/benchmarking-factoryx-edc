@@ -1,0 +1,13 @@
+series,timestamp,value
+"consumer-controlplane",1786376534,"5.581818181818181"
+"consumer-controlplane",1786376539,"5.054545454545455"
+"consumer-controlplane",1786376544,"4.363636363636363"
+"consumer-controlplane",1786376549,"3.727272727272727"
+"consumer-controlplane",1786376554,"3.3454545454545452"
+"consumer-controlplane",1786376559,"2.909090909090909"
+"consumer-controlplane",1786376564,"2.2181818181818183"
+"consumer-controlplane",1786376569,"1.7999999999999998"
+"provider-controlplane",1786376554,"0"
+"provider-controlplane",1786376559,"0"
+"provider-controlplane",1786376564,"0"
+"provider-controlplane",1786376569,"0"
