@@ -52,40 +52,112 @@ PAD="${PAD:-15}"                  # seconds of context either side of the window
 #   1 request rate, 6 heap, 7 GC, 8 threads.  rYdddlPWk: 77 CPU, 78 memory.
 PROFILE="${PROFILE:-thesis}"
 
+# --- dashboard template variables ------------------------------------------
+# /render/d-solo does NOT resolve a dashboard's template variables for you when the
+# provisioned JSON carries no saved `current` value — and neither dashboard here does.
+# The renderer then has to run each variable's own query, and node-exporter's are
+# CHAINED (job -> nodename -> node), which is where headless rendering falls over.
+#
+# The failure is silent and total: panel 77 filters on instance="$node" with an EXACT
+# match, so an unresolved variable becomes instance="" and the panel renders empty
+# rather than erroring. edc-api-red's $service is a regex match, so it degrades the
+# same way but only on the panels that use it (jvm-heap).
+#
+# Passing the values explicitly removes the renderer's guesswork entirely. Defaults
+# come from monitoring/prometheus/prometheus.yml: job_name node-exporter scraping
+# node-exporter:9100. Override if that scrape config ever changes.
+NODE_JOB="${NODE_JOB:-node-exporter}"
+NODE_INSTANCE="${NODE_INSTANCE:-node-exporter:9100}"
+
+vars_for() {
+  case "$1" in
+    edc-api-red) printf '&var-service=.*' ;;
+    rYdddlPWk)   printf '&var-job=%s&var-node=%s' "$NODE_JOB" "$NODE_INSTANCE" ;;
+  esac
+}
+
 ALL_PANELS="edc-api-red:200:tx-outcome edc-api-red:203:async-latency \
 edc-api-red:202:polls-per-tx edc-api-red:4:api-latency edc-api-red:1:request-rate \
 edc-api-red:6:jvm-heap edc-api-red:7:jvm-gc edc-api-red:8:jvm-threads \
 rYdddlPWk:77:host-cpu rYdddlPWk:78:host-mem"
 
-# Per-scenario sets. Four images per arm, each answering a question no table
-# answers as well. Everything else is deliberately empty — including the two
-# sweeps, whose results are curves of four or five points and belong in a table.
+# Per-scenario sets, organised BY RESEARCH QUESTION. Each slug carries the RQ it
+# answers, so `ls figures/` groups by thesis section and a figure can be dropped
+# straight into the section that argues from it.
+#
+# The panel is chosen for what it SHOWS that a table cannot. A median belongs in a
+# table; a curve over time — load rising, failures starting, heap climbing — is a
+# picture. Where a result is a curve ACROSS runs rather than within one (the catalog
+# and payload sweeps), no single panel can show it and the figure has to be a
+# pgfplots chart built from the exported CSVs instead; see the notes below.
+#
+# ~15 images per arm. Export one connector for the thesis (§7) and keep the rest as
+# evidence that the campaign ran.
 panels_for() {
   case "$1" in
-    # The operating point ran cleanly: transactions succeeding at a steady rate for
-    # the whole window. This is the "the benchmark ran" image.
-    steady)             echo "edc-api-red:200:tx-outcome" ;;
-    # The knee, and the control for it. tx-outcome shows where success gives way to
-    # failure as offered load rises; host-cpu shows the machine still had headroom
-    # when it did, which is what makes the knee a property of the connector.
-    saturation-open)    echo "edc-api-red:200:tx-outcome rYdddlPWk:77:host-cpu" ;;
-    # Drift over a long window is inherently a picture: a slope in a table is a
-    # number, but whether the series is stationary or climbing is something a
-    # reader should see.
-    soak)               echo "edc-api-red:6:jvm-heap" ;;
-    # Gates, controls and sweeps: no figure.
-    #   smoke             pass/fail gate, not a measurement
-    #   poll-sensitivity  its result is a three-number comparison
-    #   concurrency-closed corroborates saturation-open; the table carries it
-    #   catalog-sweep     a four-point curve -> table
-    #   payload-sweep     a five-point curve -> table (and 10 images per arm)
-    smoke|poll-sensitivity|concurrency-closed|catalog-sweep|payload-sweep) echo "" ;;
+    # --- RQ1: latency and throughput at the operating point -----------------
+    # 200 delivered tx/s over the window        -> the throughput claim
+    # 203 p95 time-to-agreed / time-to-EDR / e2e -> the latency claim, and RQ4's
+    #     phase split in one picture
+    # 4   server-side latency percentiles        -> the connector's own view, beside
+    #     the client's, which is what corroborates each number
+    # 202 polls per transaction                  -> RQ4: the observer effect the
+    #     latency figures have to be read net of
+    steady)             echo "edc-api-red:200:rq1-tx-outcome \
+edc-api-red:203:rq1-async-latency edc-api-red:4:rq1-api-latency \
+edc-api-red:202:rq4-polls-per-tx" ;;
+
+    # --- RQ2: behaviour as offered load rises (open model) ------------------
+    # 200 success giving way to failure rung by rung -> the onset of failure
+    # 4   latency percentiles climbing               -> the knee itself
+    # 201 failures by phase and reason               -> WHERE it breaks, which is
+    #     what separates a capacity limit from a rejection
+    # 77  host CPU with headroom to spare            -> the control that makes the
+    #     knee a property of the connector rather than of the machine
+    saturation-open)    echo "edc-api-red:200:rq2-tx-outcome \
+edc-api-red:4:rq2-api-latency edc-api-red:201:rq2-failures-by-reason \
+rYdddlPWk:77:rq2-host-cpu" ;;
+
+    # --- RQ2: the closed-model companion ------------------------------------
+    # Reported beside the open model, never alone: agreement between the two is what
+    # makes the ceiling a property of the connector rather than of one workload model.
+    concurrency-closed) echo "edc-api-red:200:rq2-closed-tx-outcome \
+edc-api-red:4:rq2-closed-api-latency" ;;
+
+    # --- RQ3: resource profile and long-run drift ---------------------------
+    # Whether a series is stationary or climbing is exactly what a fitted slope in a
+    # table cannot show, and it is the whole question the soak exists to answer.
+    soak)               echo "edc-api-red:6:rq3-jvm-heap edc-api-red:7:rq3-jvm-gc \
+edc-api-red:8:rq3-jvm-threads rYdddlPWk:78:rq3-host-mem" ;;
+
+    # --- RQ5: catalog scaling (illustration only) ---------------------------
+    # The RQ5 ANSWER is latency against catalog size — a curve across four runs, which
+    # no single time-series panel can show. That figure comes from rq5-catalog.csv via
+    # pgfplots. This exports the per-route latency at the largest catalog only, as an
+    # illustration of the catalog endpoint under the heaviest seeding.
+    catalog-sweep)      echo "edc-api-red:3:rq5-catalog-latency-per-route" ;;
+
+    # --- Observer-effect control --------------------------------------------
+    # Request rate per runtime at each poll interval: the consumer control plane's
+    # load should fall with the interval while the provider's does not. That contrast
+    # is the evidence, and it is visible only as a picture of both series together.
+    poll-sensitivity)   echo "edc-api-red:1:ctl-request-rate" ;;
+
+    # --- No figure -----------------------------------------------------------
+    #   smoke         a pass/fail gate, not a measurement
+    #   payload-sweep the RQ1 data-plane answer is throughput against payload size —
+    #                 again a curve across runs; pgfplots from rq1-payload.csv
+    smoke|payload-sweep) echo "" ;;
+
     # An unrecognised scenario exports nothing rather than everything: the old
-    # fallback was ALL_PANELS, so adding a scenario silently added ten images per
-    # run to the campaign.
+    # fallback was ALL_PANELS, so adding a scenario silently added ten images per run.
     *)                  echo "" ;;
   esac
 }
+
+# The catalog sweep runs at four sizes; only the largest is worth an illustration.
+# Set to "all" to export every size.
+CATALOG_FIGURE_SIZE="${CATALOG_FIGURE_SIZE:-1000}"
 
 command -v jq   >/dev/null || { echo "ERROR: jq not installed" >&2; exit 1; }
 command -v curl >/dev/null || { echo "ERROR: curl not installed" >&2; exit 1; }
@@ -127,7 +199,7 @@ echo "renderer OK -> $OUTDIR (profile=$PROFILE theme=$THEME ${WIDTH}x${HEIGHT})"
 # across connectors is worth more than the choice of repetition, which is arbitrary.)
 mapfile -t METAS < <(find "$ROOT/results" -name meta.json | sort)
 declare -A SEEN
-count=0; failed=0; skipped=0
+count=0; failed=0; skipped=0; empty=0
 
 for m in "${METAS[@]}"; do
   c="$(jq -r '.connector' "$m")"; sc="$(jq -r '.scenario' "$m")"
@@ -144,6 +216,14 @@ for m in "${METAS[@]}"; do
   variant=""
   [ "$sc" = "catalog-sweep" ] && variant="-cat${cat_size}"
   [ "$sc" = "payload-sweep" ] && [ -n "$pay" ] && variant="-${pay}"
+
+  # Only one catalog size earns an illustration; the sweep's real figure is the
+  # cross-run curve from rq5-catalog.csv. Without this the sweep alone contributes
+  # four near-identical images per arm.
+  if [ "$sc" = "catalog-sweep" ] && [ "$CATALOG_FIGURE_SIZE" != "all" ] \
+     && [ "$cat_size" != "$CATALOG_FIGURE_SIZE" ]; then
+    skipped=$((skipped+1)); continue
+  fi
 
   key="${c}_${arm}_${sc}${variant}"
   if [ "$ALL_RUNS" != "1" ]; then
@@ -168,9 +248,19 @@ for m in "${METAS[@]}"; do
     uid="${spec%%:*}"; rest="${spec#*:}"; pid="${rest%%:*}"; slug="${rest##*:}"
     out="$OUTDIR/${key}_${slug}.png"
     code="$(curl -s -u "$GF_USER:$GF_PASS" -o "$out" -w '%{http_code}' \
-      "$GRAFANA_URL/render/d-solo/$uid/x?orgId=1&panelId=$pid&from=$fromms&to=$toms&width=$WIDTH&height=$HEIGHT&theme=$THEME&tz=UTC" \
+      "$GRAFANA_URL/render/d-solo/$uid/x?orgId=1&panelId=$pid&from=$fromms&to=$toms&width=$WIDTH&height=$HEIGHT&theme=$THEME&tz=UTC$(vars_for "$uid")" \
       2>/dev/null || true)"
     if [ "$code" = "200" ] && head -c4 "$out" | grep -q 'PNG'; then
+      # A panel with no series still renders a valid 200 PNG — just an empty grid.
+      # That is the failure mode this script used to ship silently, so flag it by
+      # size: an empty dark panel compresses to a few kB, a drawn one does not.
+      bytes="$(wc -c < "$out")"
+      if [ "$bytes" -lt "${EMPTY_PNG_BYTES:-12000}" ]; then
+        echo "  WARNING: ${out##*/} is only ${bytes} B — probably an EMPTY panel." >&2
+        echo "           Check: is the run window still inside Prometheus retention," >&2
+        echo "           and does the panel's query return anything for it? (see §7)" >&2
+        empty=$((empty+1))
+      fi
       count=$((count+1)); printf '  %s\n' "${out#$ROOT/}"
     else
       rm -f "$out"; failed=$((failed+1))
@@ -181,6 +271,7 @@ done
 
 echo
 echo "exported $count panel(s) to $OUTDIR${failed:+, $failed failed}${skipped:+, $skipped run(s) skipped as gates}"
+[ "${empty:-0}" -gt 0 ] && echo "WARNING: $empty image(s) look empty — do NOT put those in the thesis until checked" >&2
 [ "$count" -eq 0 ] && { echo "Nothing exported — is Prometheus still holding these windows (7d retention)?" >&2; exit 1; }
 cat <<EOF
 
