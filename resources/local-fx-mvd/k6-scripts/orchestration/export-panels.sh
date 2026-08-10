@@ -69,11 +69,34 @@ PROFILE="${PROFILE:-thesis}"
 NODE_JOB="${NODE_JOB:-node-exporter}"
 NODE_INSTANCE="${NODE_INSTANCE:-node-exporter:9100}"
 
+# `service` on edc-api-red is multi-value with allValue unset, and its panels use it as
+# service_name=~"$service". A REGEX-MATCH position makes Grafana interpolate through its
+# regex formatter, which ESCAPES special characters — so passing ".*" arrives as "\.\*"
+# and matches nothing. (Tried on 2026-08-10: every $service panel came back empty while
+# the node-exporter panels, which take literal values, rendered fine.)
+#
+# So pass the real service names instead. They need no escaping, and each run already
+# archived them: http-p95.csv's `series` column is exactly the set of instrumented
+# runtimes that reported during that window. Deriving them per run also means a
+# connector with different service names needs no configuration here.
+SERVICE_PARAMS=""     # rebuilt per run, just before rendering
+
 vars_for() {
   case "$1" in
-    edc-api-red) printf '&var-service=.*' ;;
+    # Fall back to the All sentinel if the CSV was missing; better than a bad regex.
+    edc-api-red) printf '%s' "${SERVICE_PARAMS:-&var-service=%24__all}" ;;
     rYdddlPWk)   printf '&var-job=%s&var-node=%s' "$NODE_JOB" "$NODE_INSTANCE" ;;
   esac
+}
+
+# Build &var-service=<name> for every runtime that reported in this run's window.
+service_params_from() {
+  local csv="$1/http-p95.csv" out="" s
+  [ -f "$csv" ] || { printf ''; return; }
+  while IFS= read -r s; do
+    [ -n "$s" ] && out="${out}&var-service=${s}"
+  done < <(tail -n +2 "$csv" | cut -d, -f1 | tr -d '"' | sort -u)
+  printf '%s' "$out"
 }
 
 ALL_PANELS="edc-api-red:200:tx-outcome edc-api-red:203:async-latency \
@@ -243,6 +266,7 @@ for m in "${METAS[@]}"; do
   fi
 
   fromms=$(( (from - PAD) * 1000 )); toms=$(( (to + PAD) * 1000 ))
+  SERVICE_PARAMS="$(service_params_from "$(dirname "$m")")"
 
   for spec in $set_for_run; do
     uid="${spec%%:*}"; rest="${spec#*:}"; pid="${rest%%:*}"; slug="${rest##*:}"

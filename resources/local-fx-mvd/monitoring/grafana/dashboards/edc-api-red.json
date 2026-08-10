@@ -138,7 +138,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate({__name__=~\"k6_edr_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_succeeded(_total)?\"}[$__rate_interval])) + sum(rate({__name__=~\"k6_dsp_transactions_failed(_total)?\"}[$__rate_interval])), 0.001)",
+          "expr": "sum(rate({__name__=~\"k6_edr_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_(succeeded|failed)(_total)?\"}[$__rate_interval])), 0.001)",
           "legendFormat": "edr polls / tx",
           "refId": "A"
         },
@@ -147,7 +147,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate({__name__=~\"k6_negotiation_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_succeeded(_total)?\"}[$__rate_interval])) + sum(rate({__name__=~\"k6_dsp_transactions_failed(_total)?\"}[$__rate_interval])), 0.001)",
+          "expr": "sum(rate({__name__=~\"k6_negotiation_polls(_total)?\"}[$__rate_interval])) / clamp_min(sum(rate({__name__=~\"k6_dsp_transactions_(succeeded|failed)(_total)?\"}[$__rate_interval])), 0.001)",
           "legendFormat": "negotiation polls / tx",
           "refId": "B"
         }
