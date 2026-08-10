@@ -128,5 +128,3 @@ DEPENDENCIES
 # PAYLOAD_DIR outside the repos entirely.
 payloads/
 
-# export-panels.sh output — regenerable PNGs, copy the ones you use into the thesis repo
-figures/

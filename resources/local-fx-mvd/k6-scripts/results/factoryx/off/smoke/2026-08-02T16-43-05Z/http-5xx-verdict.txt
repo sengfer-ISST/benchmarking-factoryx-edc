@@ -1,1 +1,0 @@
-no 5xx in window (confirmed: http-status has 12 samples, so the status label IS scraped)

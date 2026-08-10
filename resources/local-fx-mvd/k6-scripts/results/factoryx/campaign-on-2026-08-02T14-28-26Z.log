@@ -1,3 +1,0 @@
-14:28:26 | === campaign: factoryx / identity-on ===
-ERROR: canonical dir not found: /home/rohitj/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts
-14:28:26 | PREFLIGHT FAIL: harness parity check failed vs /home/rohitj/benchmarking-factoryx-edc/resources/local-fx-mvd/k6-scripts
