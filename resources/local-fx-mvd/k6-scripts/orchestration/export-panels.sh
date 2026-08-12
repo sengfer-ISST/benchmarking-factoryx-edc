@@ -9,6 +9,11 @@
 #   ./orchestration/export-panels.sh                    # every connector/arm/scenario
 #   ./orchestration/export-panels.sh factoryx           # one connector
 #   ./orchestration/export-panels.sh factoryx steady    # one connector + scenario
+#   ARM=on ./orchestration/export-panels.sh factoryx    # one arm — SEE BELOW
+#
+# ALWAYS scope to the arm whose stack is currently up. Prometheus holds only that
+# arm's data (cleanup.sh does `down -v` between arms), so an unscoped export
+# re-renders the other arm's runs against data that no longer exists.
 #
 # Output: figures/<connector>_<arm>_<scenario>_<panel>.png  (drop straight into LaTeX)
 #
@@ -25,6 +30,10 @@ ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT"
 
 CONNECTOR="${1:-}"; SCENARIO="${2:-}"
+# Restrict to one identity arm. Prometheus only holds the arm that is CURRENTLY up —
+# each arm's stack is torn down with `down -v` — so exporting without this re-renders
+# the other arm's runs against data that no longer exists.
+ARM="${ARM:-${3:-}}"
 GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
 GF_USER="${GF_USER:-admin}"; GF_PASS="${GF_PASS:-admin}"
 OUTDIR="${OUTDIR:-$ROOT/figures}"
@@ -34,7 +43,8 @@ ALL_RUNS="${ALL_RUNS:-0}"         # 0 = one figure per combination (the first re
 PAD="${PAD:-15}"                  # seconds of context either side of the window
 
 # --- what to export --------------------------------------------------------
-# PROFILE=thesis (default): FOUR panels per arm. These images are not the
+# PROFILE=thesis (default): one panel set PER RESEARCH QUESTION, 17 per arm. These
+#   images are not the
 #   measurement — the measurement of record is the k6 summary and the Prometheus
 #   snapshot CSVs, and every number in the results chapter comes from those. Their
 #   job is narrower: to show that the campaign was actually executed and that the
@@ -114,7 +124,7 @@ rYdddlPWk:77:host-cpu rYdddlPWk:78:host-mem"
 # and payload sweeps), no single panel can show it and the figure has to be a
 # pgfplots chart built from the exported CSVs instead; see the notes below.
 #
-# ~15 images per arm. Export one connector for the thesis (§7) and keep the rest as
+# 17 images per arm. Export one connector for the thesis (§7) and keep the rest as
 # evidence that the campaign ran.
 panels_for() {
   case "$1" in
@@ -222,7 +232,7 @@ echo "renderer OK -> $OUTDIR (profile=$PROFILE theme=$THEME ${WIDTH}x${HEIGHT})"
 # across connectors is worth more than the choice of repetition, which is arbitrary.)
 mapfile -t METAS < <(find "$ROOT/results" -name meta.json | sort)
 declare -A SEEN
-count=0; failed=0; skipped=0; empty=0
+count=0; failed=0; skipped=0; empty=0; kept=0
 
 for m in "${METAS[@]}"; do
   c="$(jq -r '.connector' "$m")"; sc="$(jq -r '.scenario' "$m")"
@@ -232,6 +242,11 @@ for m in "${METAS[@]}"; do
 
   [ -n "$CONNECTOR" ] && [ "$c" != "$CONNECTOR" ] && continue
   [ -n "$SCENARIO" ]  && [ "$sc" != "$SCENARIO" ]  && continue
+  # ARM filter. Without it, exporting after the SECOND arm re-renders the FIRST arm's
+  # runs as well — and by then cleanup.sh has done `down -v` on that arm's stack, so
+  # its windows no longer exist in the Prometheus now running. The result was blank
+  # PNGs silently overwriting good ones. benchmark-arm.sh passes ARM for exactly this.
+  [ -n "$ARM" ] && [ "$arm" != "$ARM" ] && continue
   [ "$from" = "null" ] || [ "$to" = "null" ] && continue
 
   # Sweeps vary a factor per run, so the factor belongs in the key AND the filename —
@@ -271,14 +286,26 @@ for m in "${METAS[@]}"; do
   for spec in $set_for_run; do
     uid="${spec%%:*}"; rest="${spec#*:}"; pid="${rest%%:*}"; slug="${rest##*:}"
     out="$OUTDIR/${key}_${slug}.png"
-    code="$(curl -s -u "$GF_USER:$GF_PASS" -o "$out" -w '%{http_code}' \
+    # Render to a temp file first. An empty panel is a VALID 200 PNG, so writing
+    # straight to $out would let a blank render replace an image that was correct when
+    # its arm's stack was still up. Nothing that already exists is destroyed until the
+    # replacement has been shown to contain something.
+    tmp="$(mktemp "${TMPDIR:-/tmp}/gfpanel.XXXXXX")"
+    code="$(curl -s -u "$GF_USER:$GF_PASS" -o "$tmp" -w '%{http_code}' \
       "$GRAFANA_URL/render/d-solo/$uid/x?orgId=1&panelId=$pid&from=$fromms&to=$toms&width=$WIDTH&height=$HEIGHT&theme=$THEME&tz=UTC$(vars_for "$uid")" \
       2>/dev/null || true)"
-    if [ "$code" = "200" ] && head -c4 "$out" | grep -q 'PNG'; then
-      # A panel with no series still renders a valid 200 PNG — just an empty grid.
-      # That is the failure mode this script used to ship silently, so flag it by
-      # size: an empty dark panel compresses to a few kB, a drawn one does not.
-      bytes="$(wc -c < "$out")"
+    if [ "$code" = "200" ] && head -c4 "$tmp" | grep -q 'PNG'; then
+      # Size is the only signal available: an empty dark grid compresses to a few kB,
+      # a panel with series drawn on it does not.
+      bytes="$(wc -c < "$tmp")"
+      if [ "$bytes" -lt "${EMPTY_PNG_BYTES:-12000}" ] && [ -s "$out" ] \
+         && [ "$(wc -c < "$out")" -ge "${EMPTY_PNG_BYTES:-12000}" ]; then
+        rm -f "$tmp"; kept=$((kept+1))
+        echo "  KEPT existing ${out##*/} — the new render was empty (${bytes} B)." >&2
+        echo "        That arm's data is no longer in this Prometheus; not overwriting." >&2
+        continue
+      fi
+      mv "$tmp" "$out"
       if [ "$bytes" -lt "${EMPTY_PNG_BYTES:-12000}" ]; then
         echo "  WARNING: ${out##*/} is only ${bytes} B — probably an EMPTY panel." >&2
         echo "           Check: is the run window still inside Prometheus retention," >&2
@@ -287,7 +314,7 @@ for m in "${METAS[@]}"; do
       fi
       count=$((count+1)); printf '  %s\n' "${out#$ROOT/}"
     else
-      rm -f "$out"; failed=$((failed+1))
+      rm -f "$tmp"; failed=$((failed+1))
       echo "  FAILED (HTTP $code) $uid/$pid for $key" >&2
     fi
   done
@@ -296,6 +323,7 @@ done
 echo
 echo "exported $count panel(s) to $OUTDIR${failed:+, $failed failed}${skipped:+, $skipped run(s) skipped as gates}"
 [ "${empty:-0}" -gt 0 ] && echo "WARNING: $empty image(s) look empty — do NOT put those in the thesis until checked" >&2
+[ "${kept:-0}" -gt 0 ] && echo "NOTE: $kept existing image(s) kept — the re-render was empty (wrong arm up?)" >&2
 [ "$count" -eq 0 ] && { echo "Nothing exported — is Prometheus still holding these windows (7d retention)?" >&2; exit 1; }
 cat <<EOF
 

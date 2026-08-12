@@ -23,8 +23,15 @@ export const options = Object.assign({}, baseOptions, {
       // Halved with the steady rate (2 -> 1), keeping the "soak below steady" rule
       // stated above: a soak at the operating point measures a queue forming, not a
       // runtime ageing.
-      rate: Number(__ENV.RATE || 0.5),
-      timeUnit: '1s',
+      //
+      // EXPRESSED AS 1 PER 2s, NOT 0.5 PER 1s. k6's `rate` is an int64, so a
+      // fractional value is rejected while PARSING the options — before the script
+      // runs, so there is no summary and no result folder worth keeping:
+      //   json: cannot unmarshal number 0.5 into Go struct field ... of type int64
+      // Every soak run of the 2026-08-11 campaign died on exactly that. Keep RATE
+      // integral and change TIME_UNIT to go below 1/s.
+      rate: Number(__ENV.RATE || 1),
+      timeUnit: __ENV.TIME_UNIT || '2s',
       duration: __ENV.DURATION || '30m',
       preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 50),
       maxVUs: Number(__ENV.MAX_VUS || 200),

@@ -221,7 +221,7 @@ step "saturation-open x${REPS_SATURATION}" "$HERE/run-matrix.sh" "$CONNECTOR" "$
 # Before teardown, and before Prometheus' 7-day retention expires.
 if [ "$WITH_EXPORT" = "1" ]; then
   gap
-  step "export figures" "$HERE/export-panels.sh" "$CONNECTOR"
+  step "export figures" env ARM="$ARM" "$HERE/export-panels.sh" "$CONNECTOR"
 fi
 
 # --- report ----------------------------------------------------------------
