@@ -248,6 +248,15 @@ for m in "${METAS[@]}"; do
   # PNGs silently overwriting good ones. benchmark-arm.sh passes ARM for exactly this.
   [ -n "$ARM" ] && [ "$arm" != "$ARM" ] && continue
   [ "$from" = "null" ] || [ "$to" = "null" ] && continue
+  # A run whose k6 died before writing a summary carries no measurements — but run.sh
+  # had already recorded the epochs and taken a Prometheus snapshot, so the directory
+  # still looks like a run here. Since metas sort ascending and ALL_RUNS=0 keeps the
+  # FIRST match, such a corpse outranks the good re-run that replaced it. Every soak of
+  # the 2026-08-11 campaign was one (k6 rejects a fractional arrival rate), and each
+  # exported as four empty panels from a 15-second window while the real 30-minute run
+  # sat beside it untouched. The representative figure must come from a run that
+  # actually produced output.
+  [ -f "$(dirname "$m")/k6-summary.json" ] || { skipped=$((skipped+1)); continue; }
 
   # Sweeps vary a factor per run, so the factor belongs in the key AND the filename —
   # otherwise the four catalog sizes overwrite each other.
